@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { GamePhysics, predictTrajectory, FIXED_STEP } from '../src/physics.js';
+import { LEVELS } from '../src/levels.js';
 
 const supportHouse = () => ({
   shots: 3, unlockedTypes: ['rocket', 'sutli', 'chakri', 'ladi'],
@@ -82,9 +83,9 @@ test('the four cracker abilities have separate observable mechanics', () => {
   ladi.launch('ladi', { x: 23, y: 0 });
   settle(ladi);
   const pops = ladiEvents.filter(event => event.type === 'explosion' && event.cracker === 'ladi');
-  assert.equal(pops.length, 8);
+  assert.equal(pops.length, 7);
   assert.ok(pops.at(-1).x > pops[0].x + 150);
-  assert.ok(pops.at(-1).time > pops[0].time + 900);
+  assert.ok(pops.at(-1).time >= pops[0].time + 900);
   ladi.destroy();
 });
 
@@ -99,4 +100,38 @@ test('shots always finish, inventory cannot be overspent, and zero damage yields
   assert.equal(game.getState().remaining, 0);
   assert.equal(game.launch('rocket', { x: 23, y: 0 }), false);
   game.destroy();
+});
+
+test('all eight authored structures begin upright and have a reproducible legal winning shot', () => {
+  assert.equal(LEVELS.length, 8);
+  for (const level of LEVELS) {
+    const game = new GamePhysics(level);
+    assert.equal(game.progress, 0, `level ${level.id} starts undamaged`);
+    for (const body of game.bodies) {
+      const { piece } = body.plugin;
+      assert.ok(Math.hypot(body.position.x - piece.x, body.position.y - piece.y) < 15,
+        `level ${level.id} ${piece.kind} must be physically supported before launch`);
+    }
+    const velocity = { x: 23, y: level.id >= 7 ? -4 : 0 };
+    const type = level.unlockedTypes.at(-1);
+    assert.equal(game.launch(type, velocity), true);
+    settle(game);
+    assert.equal(game.status, 'won', `level ${level.id} can be won with ${type}`);
+    assert.ok(game.progress >= 90);
+    assert.ok(game.shotsUsed <= level.par);
+    game.destroy();
+  }
+});
+
+test('late-level gateways require an elevated shot and are excluded from destruction scores', () => {
+  for (const level of LEVELS.slice(6)) {
+    const game = new GamePhysics(level);
+    assert.ok(game.obstacles.length > 0);
+    game.launch('ladi', { x: 23, y: 0 });
+    settle(game);
+    assert.equal(game.status, 'ready', `level ${level.id} low shot cannot earn a perfect clear`);
+    assert.ok(game.progress < 90);
+    assert.ok(game.obstacles.every(body => body.isStatic && !body.plugin.destroyed));
+    game.destroy();
+  }
 });

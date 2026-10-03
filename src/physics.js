@@ -54,6 +54,7 @@ export class GamePhysics {
     Engine.clear(this.engine);
     this.level = level;
     this.bodies = [];
+    this.obstacles = [];
     this.projectile = null;
     this.status = 'ready';
     this.score = 0;
@@ -77,6 +78,16 @@ export class GamePhysics {
       isStatic: true, friction: 0.8, label: 'launcher-rooftop',
     });
     Composite.add(this.engine.world, [ground, rooftop]);
+    for (const piece of level.obstacles || []) {
+      const body = Bodies.rectangle(piece.x, piece.y, piece.w, piece.h, {
+        isStatic: true, friction: 0.8, restitution: 0.06, label: 'street-obstacle',
+        chamfer: { radius: 3 },
+      });
+      body.plugin = { piece, obstacle: true, destroyed: false, health: 1, maxHealth: 1,
+        original: { x: piece.x, y: piece.y, angle: 0 } };
+      this.obstacles.push(body);
+      Composite.add(this.engine.world, body);
+    }
     for (const piece of level.pieces) {
       const material = MATERIALS[piece.material] || MATERIALS.brick;
       const maxHealth = piece.health || material.health * (piece.weak ? 0.48 : 1);
@@ -319,7 +330,7 @@ export class GamePhysics {
     const velocityX = this.projectile?.velocity.x || 10;
     const velocityY = this.projectile?.velocity.y || 0;
     const airborne = y < GROUND_Y - 85;
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 7; i++) {
       this.scheduledPops.push({
         at: this.time + i * 155,
         x: x + i * Math.max(26, Math.min(45, velocityX * 2.5)),
@@ -356,7 +367,7 @@ export class GamePhysics {
 
   _damage(body, amount, reason) {
     const p = body.plugin;
-    if (!p?.piece || p.destroyed || amount <= 0) return;
+    if (!p?.piece || p.obstacle || p.destroyed || amount <= 0) return;
     const actual = Math.min(p.health, amount);
     p.health = Math.max(0, p.health - amount);
     this.score += Math.round(actual * 1.2);
@@ -425,6 +436,7 @@ export class GamePhysics {
   getState() {
     return {
       bodies: this.bodies || [], projectile: this.projectile,
+      obstacles: this.obstacles || [],
       progress: this.progress || 0, score: this.score || 0,
       shotsUsed: this.shotsUsed || 0,
       remaining: Math.max(0, (this.level?.shots || 0) - (this.shotsUsed || 0)),
@@ -438,5 +450,6 @@ export class GamePhysics {
     Engine.clear(this.engine);
     this.projectile = null;
     this.bodies = [];
+    this.obstacles = [];
   }
 }
