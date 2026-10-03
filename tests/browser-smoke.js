@@ -87,9 +87,33 @@ try {
   await page.locator('.result-won').waitFor();
   const win=await page.evaluate(()=>({progress:window.__patakha.getState().physics.progress,shots:window.__patakha.getState().physics.shotsUsed,unlocked:window.__patakha.getState().save.unlocked}));
   assert.ok(win.progress>=90);assert.equal(win.shots,pointerShots);assert.equal(win.unlocked,2);
+  if(win.progress>=97) {
+    assert.equal(await page.locator('.result-diyas .is-lit').count(),3);
+    assert.ok(await page.evaluate(()=>window.__patakha.renderer.celebration>0));
+  }
   await page.screenshot({path:path.join(screenshots,'victory.png')});
   await page.locator('[data-action="next"]').click();
   assert.equal(await page.evaluate(()=>window.__patakha.getState().level),2);
+
+  // Reproduce the reported flattened skyline using legal Chakri launches.
+  // The intact chunks in its rubble pile must still earn full destruction.
+  await page.evaluate(()=>window.__patakha.startLevel(8));
+  if(await page.locator('[data-action="close-unlock"]').count())await page.locator('[data-action="close-unlock"]').click();
+  await page.getByRole('button',{name:'Choose Chakri',exact:true}).click();
+  const collapse=await page.evaluate(()=>{
+    const game=window.__patakha.physics;
+    const scale=32/Math.hypot(32,-6);
+    for(let shot=0;shot<3&&game.status!=='won';shot++) {
+      if(!game.launch('chakri',{x:32*scale,y:-6*scale}))throw new Error('collapsed skyline shot did not launch');
+      for(let i=0;i<650&&['flight','settling'].includes(game.status);i++)game.update(1000/60);
+    }
+    return {progress:game.progress,status:game.status,remaining:game.getState().remaining,unsupported:game.getUnsupportedBodies().length};
+  });
+  assert.equal(collapse.status,'won');assert.equal(collapse.progress,100);assert.equal(collapse.unsupported,0);
+  await page.locator('.result-won').waitFor();
+  assert.equal(await page.locator('.result-diyas .is-lit').count(),3);
+  assert.match(await page.locator('.result-stats>div').first().textContent(),/100\s*%/);
+  await page.screenshot({path:path.join(screenshots,'full-collapse.png')});
 
   await page.getByRole('button',{name:'Turn music off',exact:true}).click();
   await page.getByRole('button',{name:'Turn sound effects off',exact:true}).click();
@@ -97,5 +121,5 @@ try {
   assert.equal(await page.evaluate(()=>window.__patakha.getState().save.music),false);
   assert.equal(await page.evaluate(()=>window.__patakha.getState().save.sound),false);
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({passed:true,weak,win,checks:['actual uploaded video playback','start/help/locked levels','pause/resume','real weak drag fails to collapse skyline','long range trajectory','rocket ability','paused flight','retry','real pointer victory','next level and saved unlock','audio persistence'],errors}));
+  console.log(JSON.stringify({passed:true,weak,win,collapse,checks:['actual uploaded video playback','start/help/locked levels','pause/resume','real weak drag fails to collapse skyline','long range trajectory','rocket ability','paused flight','retry','real pointer victory','next level and saved unlock','collapsed skyline reads 100% and earns three diyas','audio persistence'],errors}));
 } finally {await browser.close();}

@@ -450,9 +450,10 @@ export class SceneRenderer {
       ctx.restore();
     });
     this.popups = this.popups.filter(e => e.age < e.life);
-    this.popups.forEach(e => {
-      e.age += dt; const t = e.age / e.life, text = String(e.text).toUpperCase(), unit = text.length > 9 ? 3 : 6;
-      const width = text.length * unit * 6, center = Math.max(width / 2 + 21, Math.min(W - width / 2 - 21, e.x)), top = e.y - t * 51;
+    this.popups.forEach((e, index) => {
+      const minimumUnit = Math.ceil(14 / (7 * this.viewport.scale * PIXEL)) * PIXEL;
+      e.age += dt; const t = e.age / e.life, text = String(e.text).toUpperCase(), unit = Math.max(text.length > 9 ? 3 : 6, minimumUnit);
+      const width = text.length * unit * 6, center = Math.max(width / 2 + 21, Math.min(W - width / 2 - 21, e.x)), top = e.y - t * 51 - index * (unit * 7 + 24);
       ctx.save(); ctx.globalAlpha = Math.min(1, (1 - t) * 4);
       fill(ctx, INK, center - width / 2 - 9, top - 9, width + 18, unit * 7 + 18);
       fill(ctx, '#49354e', center - width / 2 - 9, top + unit * 7 + 9, width + 18, 3);

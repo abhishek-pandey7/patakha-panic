@@ -130,6 +130,8 @@ export class GamePhysics {
       });
       body.plugin = {
         piece, health: maxHealth, maxHealth, destroyed: false,
+        structuralDestroyed: false, materialDestroyed: false,
+        originalPiece: { ...piece },
         original: { x: piece.x, y: piece.y, angle: 0 },
         weight: Math.sqrt(piece.w * piece.h), points: material.points,
         lastHit: -10000, collapsed: false, strainDamage:0, peakImpact:0,
@@ -147,6 +149,12 @@ export class GamePhysics {
       Sleeping.set(body, true);
     }
     this.totalWeight = this.bodies.reduce((sum, body) => sum + body.plugin.weight, 0);
+    this.buildingGroups = new Map();
+    for (const body of this.bodies) {
+      const group = body.plugin.originalPiece.group ?? 'building';
+      if (!this.buildingGroups.has(group)) this.buildingGroups.set(group, []);
+      this.buildingGroups.get(group).push(body);
+    }
     this.initializing = false;
     this.getUnsupportedBodies();
     return this.getState();
@@ -441,6 +449,7 @@ export class GamePhysics {
       material: p.piece.material, amount: actual, destroyed: p.health <= 0, reason });
     if (p.health > 0) return;
     p.destroyed = true;
+    p.materialDestroyed = true;
     p.collapsed = reason === 'collapse';
     p.destroyedAt = this.time;
     Sleeping.set(body, false);
@@ -459,6 +468,11 @@ export class GamePhysics {
     p.piece = {...p.piece,w:p.piece.w*sx,h:p.piece.h*sy,sourceKind:p.piece.kind,kind:'rubble'};
     // Rubble remains a normal body, allowing it to transfer momentum to the
     // neighboring structure. Its ghost health can never award points twice.
+    this._awardDestruction(body);
+  }
+
+  _awardDestruction(body) {
+    const p = body.plugin;
     this.score += p.points;
     if (this.time - this.lastDestructionTime < 1100) this.streak++;
     else this.streak = 1;
@@ -474,10 +488,63 @@ export class GamePhysics {
     }
   }
 
+  _markStructuralRuin(body) {
+    const p = body.plugin;
+    if (p.destroyed) return;
+    p.structuralDestroyed = true;
+    p.destroyed = true;
+    p.collapsed = true;
+    p.destroyedAt = this.time;
+    // A steel chunk can retain its material strength and full collision shape
+    // while no longer being part of a standing building. Structural scoring
+    // must not pulverize it or move it to make the destruction meter complete.
+    this.score += Math.round(p.health * 1.2);
+    body.collisionFilter.category = 0x0004;
+    this._emit({ type:'damage', x:body.position.x, y:body.position.y,
+      material:p.piece.material, amount:0, destroyed:true, structural:true, reason:'structural-ruin' });
+    this._awardDestruction(body);
+  }
+
+  _countSettledStructuralRuin() {
+    if (!this.shotsUsed || this.initializing) return;
+    for (const bodies of this.buildingGroups.values()) {
+      const originalTop = Math.min(...bodies.map(b => b.plugin.original.y - b.plugin.originalPiece.h / 2));
+      const height = GROUND_Y - originalTop;
+      // A taller house may leave a deeper pile, but the envelope never reaches
+      // the surviving upper storeys of a standing tower.
+      const pileDepth = Math.min(245, Math.max(140, height * 0.58));
+      const metrics = bodies.map(body => {
+        const p = body.plugin;
+        const shape = p.originalPiece;
+        const fall = body.position.y - p.original.y;
+        const delta = body.angle - p.original.angle;
+        const tilt = Math.abs(Math.atan2(Math.sin(delta), Math.cos(delta)));
+        const low = body.position.y >= GROUND_Y - pileDepth;
+        const base = shape.kind === 'support' || shape.kind === 'brace';
+        const tippedBase = base && tilt > 0.75 && body.position.y >= GROUND_Y - Math.max(145, shape.h + 35);
+        const fallen = low && fall >= Math.max(55, shape.h * 0.6);
+        const toppled = low && tilt > 0.85 && (fall > 25 || body.position.y > GROUND_Y - 110);
+        return { body, base, fallen:fallen || tippedBase || toppled };
+      });
+      for (const metric of metrics) if (metric.fallen) this._markStructuralRuin(metric.body);
+      const superstructure = metrics.filter(m => !m.base);
+      const upperWeight = superstructure.reduce((sum,m) => sum + m.body.plugin.weight, 0);
+      const ruinedWeight = superstructure.reduce((sum,m) => sum + (m.body.plugin.destroyed ? m.body.plugin.weight : 0), 0);
+      const pileTop = Math.min(...bodies.flatMap(b => b.vertices.map(v => v.y)));
+      const compactDepth = Math.min(270, Math.max(145, height * 0.65));
+      // Once the original floors and roof form a compact street-level pile,
+      // lone upright foundation bits are debris too: they carry no building.
+      // Any high surviving floor prevents this group-wide cleanup.
+      if (upperWeight > 0 && ruinedWeight / upperWeight >= 0.8 && pileTop >= GROUND_Y - compactDepth) {
+        for (const body of bodies) this._markStructuralRuin(body);
+      }
+    }
+  }
+
   _updateProgress() {
     const damagedWeight = this.bodies.reduce((sum, body) => {
       const p = body.plugin;
-      return sum + p.weight * (1 - p.health / p.maxHealth);
+      return sum + p.weight * (p.structuralDestroyed ? 1 : 1 - p.health / p.maxHealth);
     }, 0);
     this.progress = Math.min(100, 100 * damagedWeight / Math.max(1, this.totalWeight));
   }
@@ -492,7 +559,6 @@ export class GamePhysics {
 
   _finishShot() {
     if (this.status === 'won' || this.status === 'lost' || this.status === 'ready') return;
-    this._updateProgress();
     const unsupported=this.getUnsupportedBodies();
     if(unsupported.length){
       for(const body of unsupported)Sleeping.set(body,false);
@@ -500,6 +566,8 @@ export class GamePhysics {
       this.calmTime=0;
       return false;
     }
+    this._countSettledStructuralRuin();
+    this._updateProgress();
     for (const body of this.bodies) {
       Body.setVelocity(body, { x: 0, y: 0 });
       Body.setAngularVelocity(body, 0);

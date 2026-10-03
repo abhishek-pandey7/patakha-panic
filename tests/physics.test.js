@@ -118,9 +118,51 @@ test('checked-in level solutions clear each authored puzzle within its ammunitio
   }
 });
 
-test('late structures withstand common single-shot brute force attempts',()=>{
+test('fully collapsed street rubble counts as 100% even when tough chunks retain material health',()=>{
+  const g=new GamePhysics(LEVELS[7]);
+  const originalAreas=new Map(g.bodies.map(b=>[b,b.area]));
+  // This is the reported pile scenario, using a legal player launch. The
+  // building already physically collapses on this shot; further shots would
+  // only grind intact concrete and steel rubble into smaller fragments.
+  playShot(g,{type:'chakri',vx:32,vy:-6});
+  assert.equal(g.status,'won');assert.equal(g.progress,100);
+  assert.ok(g.bodies.every(b=>b.plugin.destroyed));
+  for(const kind of ['roof','tank','wall','slab','support'])assert.ok(g.bodies.some(b=>b.plugin.originalPiece.kind===kind&&b.plugin.destroyed));
+  const ruins=g.bodies.filter(b=>b.plugin.structuralDestroyed);
+  assert.ok(ruins.length>=8);
+  assert.ok(ruins.some(b=>b.plugin.piece.material==='concrete'&&b.plugin.health>100));
+  assert.ok(ruins.some(b=>b.plugin.piece.material==='metal'&&b.plugin.health>100));
+  for(const b of ruins){assert.equal(b.plugin.materialDestroyed,false);assert.equal(b.area,originalAreas.get(b),'scoring must not shrink a surviving rubble chunk');}
+  const score=g.score;const health=ruins.map(b=>b.plugin.health);
+  g._countSettledStructuralRuin();g._updateProgress();
+  assert.equal(g.score,score,'a structural ruin can award points only once');assert.equal(g.progress,100);
+  assert.deepEqual(ruins.map(b=>b.plugin.health),health,'structural scoring preserves material HP');
+  assert.equal(g.getUnsupportedBodies().length,0);g.destroy();
+});
+
+test('a tilted tank on a surviving high roof does not count as street rubble',()=>{
+  const g=new GamePhysics(LEVELS[7]);
+  for(let i=0;i<3;i++)playShot(g,{type:'chakri',vx:32,vy:0});
+  const tank=g.bodies.find(b=>b.plugin.originalPiece.group===2&&b.plugin.originalPiece.kind==='tank');
+  assert.ok(Math.abs(tank.angle-tank.plugin.original.angle)>1);
+  assert.ok(tank.position.y<500&&tank.position.y-tank.plugin.original.y<15);
+  assert.equal(tank.plugin.structuralDestroyed,false);assert.equal(tank.plugin.destroyed,false);
+  assert.ok(g.progress<40);assert.equal(g.status,'ready');g.destroy();
+});
+
+test('standing late structures retain their score while genuine full collapses may clear in one shot',()=>{
+  let standingCases=0;
   for(const level of LEVELS.slice(4))for(const type of level.unlockedTypes)for(const vy of[-6,-3,0,2]) {
     const g=new GamePhysics(level);playShot(g,{type,vx:32,vy,...(type==='rocket'?{activateX:1120}:{})});
-    assert.notEqual(g.status,'won',`level ${level.id} ${type} brute shot must require another choice`);g.destroy();
+    const standing=g.bodies.filter(b=>!b.plugin.destroyed&&b.position.y-b.plugin.original.y<35&&Math.abs(b.angle-b.plugin.original.angle)<0.35);
+    const standingWeight=standing.reduce((sum,b)=>sum+b.plugin.weight*b.plugin.health/b.plugin.maxHealth,0);
+    if(standingWeight>=g.totalWeight*0.12){
+      standingCases++;
+      assert.ok(g.progress<90,`level ${level.id} ${type} still has an intact structure`);
+      assert.notEqual(g.status,'won');
+    }
+    for(const b of standing)assert.equal(b.plugin.structuralDestroyed,false);
+    g.destroy();
   }
+  assert.ok(standingCases>=20,'the suite actually exercises many standing late structures');
 });

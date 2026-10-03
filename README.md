@@ -41,7 +41,7 @@ Rocket gets one precise, piercing mid-air boost. Sutli Bomb has a wide heavy bla
 
 Shots are limited per level. The next shot becomes available after impact and a bounded settling period. Targets sit over 1,000 world pixels from the launcher, behind obstacles that require different trajectories. Aim at striped weak supports; wider bases, additional piers, reinforced floors and independent towers need deliberate shots. The preview uses the same gravity, drag and fixed timestep as the physical projectile.
 
-Blast damage, radius and impulse scale with shot power. Weak throws cannot produce a full-strength explosion or an automatic skyline collapse. Small shifts and rocking do not count as destroyed structure; substantial falling rubble and hard impacts still create chain reactions.
+Blast damage, radius and impulse scale with shot power. Weak throws cannot produce a full-strength explosion or an automatic skyline collapse. Small shifts and rocking do not count as destroyed structure; substantial falling rubble and hard impacts still create chain reactions. Destruction also credits physical collapse: once the target has become a rubble pile, it counts as 100% even when individual concrete or steel chunks remain intact.
 
 Breaking a support wakes the connected structure. Unsupported floors and tanks continue falling under gravity before the next shot; settled rubble remains physical and can damage neighbouring targets.
 
@@ -70,6 +70,7 @@ At 90% destruction you earn a diya and unlock the next level. Two diyas reward h
 - `public/assets/diwali-background.mp4`: an unchanged copy of the supplied `Diwali_Dynamic_Background.mp4`, continuously looped and muted. Transparent sky and a minimal edge vignette leave the original city visible.
 - `public/assets/crackers-reference.png`: the supplied four-cracker reference, sampled directly as an atlas without replacing the original designs.
 - Pixel art launcher, material textures, obstacles, rubble, sparks and celebration fireworks: Canvas 2D drawings. Decorative foreground diyas have been removed; earned diya awards remain in the menus.
+- Pixel lettering for titles and scores; larger system monospace text for hints, controls, material matchups and menu explanations.
 - Original festive pentatonic instrumental loop and launch, explosion, crumbling and celebration sounds: synthesized locally with Web Audio. Independent music and sound switches.
 
 ## Contributing

@@ -3,6 +3,16 @@ import { drawCracker, crackerAtlasReady } from './art.js';
 import * as Physics from './physics.js';
 
 const TYPES = ['rocket', 'sutli', 'chakri', 'ladi'];
+const COMPACT_HINTS = [
+  'Full pull. Clear the barricade; boost into striped wood.',
+  'Aim below the sign. Break a leg; follow with a low shot.',
+  'Lob over the arch. Sutli softens brick; boost breaks concrete.',
+  'Clear the steps. Tip the tall tower toward its neighbour.',
+  'Use the ramp. Roll Chakri low through wooden shopfronts.',
+  'Clear the walls. Light Ladi between the shops.',
+  'Thread below the canopy. Boost into reinforced legs.',
+  'Clear the canopies. Mix Sutli blasts with Rocket boosts.',
+];
 const MATERIAL_FALLBACK = {
   wood: { displayname: 'Wood', health: 60, resistance: { rocket: 1, boostedRocket: 1.25, sutli: .95, chakri: 1.7, ladi: 1.55 } },
   brick: { displayname: 'Brick', health: 115, resistance: { rocket: .75, boostedRocket: 1.1, sutli: 1.45, chakri: .6, ladi: .85 } },
@@ -71,6 +81,10 @@ export class GameUI {
         <div class="portrait-nudge" aria-hidden="true"><span>↻</span>More skyline, more dhamaka.<small>Turn your phone sideways for the best view.</small></div>
       </main>`;
     this.canvas = document.getElementById('game-canvas');
+    this.canvas.addEventListener('pointerdown', () => {
+      if (this.screenName === 'play' && this.state.physics?.status === 'ready') this.root.dataset.aiming = 'true';
+    });
+    for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) this.canvas.addEventListener(event, () => { this.root.dataset.aiming = 'false'; });
     this.layer = document.getElementById('screen-layer');
     this.video = document.getElementById('festival-video');
     this.video.muted = true;
@@ -142,10 +156,13 @@ export class GameUI {
   update(state) {
     this.state = { ...this.state, ...state, save: state.save || this.state.save };
     const { level, physics = {}, selected = 'rocket' } = this.state;
+    const compact = window.matchMedia('(max-height: 510px) and (orientation: landscape)').matches;
     const set = (id, text) => { const node = document.getElementById(id); if (node && node.textContent !== String(text)) node.textContent = text; };
     set('hud-level-number', `LEVEL ${String(level?.id || 1).padStart(2, '0')} / 08`);
     set('hud-level-name', level?.name || 'Gully Warm-Up');
-    set('hud-score', formatScore(physics.score));
+    set('hud-score', compact && physics.score >= 1000 ? `${(physics.score / 1000).toFixed(physics.score >= 100000 ? 0 : 1)}K` : formatScore(physics.score));
+    document.getElementById('hud-score').title = `${formatScore(physics.score)} points`;
+    document.getElementById('hud-score').setAttribute('aria-label', `${formatScore(physics.score)} points`);
     const progress = Math.max(0, Math.min(100, Math.round(physics.progress || 0)));
     const progressLabel = document.getElementById('hud-progress');
     if (progressLabel.dataset.value !== String(progress)) {
@@ -155,7 +172,9 @@ export class GameUI {
     document.getElementById('destruction-fill').style.width = `${progress}%`;
     document.getElementById('destruction-fill').classList.toggle('is-complete', progress >= 90);
     set('hud-remaining', physics.remaining ?? level?.shots ?? 3);
-    set('level-hint-text', level?.hint || 'Find the weak point. Let gravity do the rest.');
+    set('level-hint-text', compact ? COMPACT_HINTS[(level?.id || 1) - 1] : level?.hint || 'Find the weak point. Let gravity do the rest.');
+    document.getElementById('level-hint').title = level?.hint || '';
+    this.root.dataset.flight = String(['flight', 'settling'].includes(physics.status));
     const ready = physics.status === 'ready' || !physics.status;
     this.root.querySelectorAll('.cracker-card').forEach((button) => {
       const allowed = level?.unlockedTypes?.includes(button.dataset.type) ?? true;
@@ -205,6 +224,7 @@ export class GameUI {
   }
 
   showScreen(name, data = {}) {
+    this.root.dataset.aiming = 'false';
     if (data.save) this.state.save = data.save;
     if (name !== 'play') {
       clearTimeout(this.toastTimer);
