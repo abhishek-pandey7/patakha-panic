@@ -2,7 +2,7 @@
 
 **Aim. Ignite. Bring the house down.**
 
-A playable Diwali physics puzzle game. Launch four different firecrackers into eight empty illustrated skylines, discover their weak supports, and clear at least 90% of each structure. Made with vanilla JavaScript, Canvas 2D, Vite, and Matter.js 0.20.0.
+A playable Diwali physics puzzle game with a pixel art foreground and the supplied animated Diwali city video. Launch four different firecrackers across a long obstacle course into eight empty skylines, choose the right material matchup, discover their load-bearing supports, and clear at least 90% of each structure. Made with vanilla JavaScript, Canvas 2D, Vite, and Matter.js 0.20.0.
 
 ## Run
 
@@ -39,24 +39,35 @@ The `dist/` folder is a complete static game. Serve it over HTTP or upload it to
 
 Rocket gets one precise, piercing mid-air boost. Sutli Bomb has a wide heavy blast. Chakri spins and rolls through street-level supports. Ladi sends a timed chain of small explosions towards neighbouring buildings. Abilities unlock with short illustrated explanations.
 
-Shots are limited per level. The next shot becomes available after impact and a bounded settling period. Aim at striped weak supports; heavy concrete is harder to damage directly, but falling concrete helps smash the neighbouring structure. The preview uses the same gravity, drag and fixed timestep as the physical projectile.
+Shots are limited per level. The next shot becomes available after impact and a bounded settling period. Targets sit over 1,000 world pixels from the launcher, behind obstacles that require different trajectories. Aim at striped weak supports; wider bases, additional piers, reinforced floors and independent towers need deliberate shots. The preview uses the same gravity, drag and fixed timestep as the physical projectile.
+
+Blast damage, radius and impulse scale with shot power. Weak throws cannot produce a full-strength explosion or an automatic skyline collapse. Small shifts and rocking do not count as destroyed structure; substantial falling rubble and hard impacts still create chain reactions.
+
+| Material | Effective choice | What it resists |
+| --- | --- | --- |
+| Wood | Chakri and Ladi; precise Rocket support shots | Requires enough power to reach and break the support |
+| Brick | Sutli Bomb | Chakri and ordinary Rockets have reduced damage |
+| Concrete | Boosted Rocket into an exposed pier; concentrated Sutli blast | Chakri, Ladi and ordinary Rockets |
+| Steel | Boosted Rocket | Chakri and Ladi; Sutli damage is reduced |
+
+The tray shows the selected cracker's damage multiplier for each material. Rocket values explain its boosted piercing ability. The help screen includes the full material guide. Building textures and resistance badges make the target composition visible before launching.
 
 ## Eight skylines
 
 | Location | Levels | New challenge |
 | --- | --- | --- |
-| Gully Warm-Up | First Spark; Good Neighbours | Timber supports, precise Rocket shots |
-| Terrace Trouble | Tank You Very Much; Balcony Dominoes | Concrete floors, balconies, rooftop water tanks; Sutli Bomb |
-| Bazaar Blast | Shop, Drop & Roll; Chain Reaction | Closely packed shops; Chakri and Ladi |
-| Skyline Showdown | Bridge over Boom; The Grand Dhamaka | Tall, heavy structures and careful ability timing |
+| Gully Warm-Up | First Spark; Good Neighbours | Long shots, low barricade, overhead sign and wider support bases |
+| Terrace Trouble | Tank You Very Much; Balcony Dominoes | Arch, stepped wall, terraced buildings, reinforced piers and rooftop tanks |
+| Bazaar Blast | Shop, Drop & Roll; Chain Reaction | Ramp, staggered walls, wood and brick shopfronts, steel-backed targets |
+| Skyline Showdown | Bridge over Boom; The Grand Dhamaka | Steel canopies, independent reinforced towers and mixed-material load paths |
 
 At 90% destruction you earn a diya and unlock the next level. Two diyas reward higher destruction or efficiency. Three require at least 97% destruction and a shot count within the level's par, or at least two unused crackers. A three-diya finish fills the sky with a firework celebration. Score, best diyas, unlocked levels and separate music/sound preferences persist in local storage. The game remains playable when browser storage is unavailable.
 
 ## Assets and audio
 
-- `public/assets/diwali-background.mp4`: the supplied `Diwali_Dynamic_Background.mp4`, continuously looped, muted and softened beneath the foreground.
+- `public/assets/diwali-background.mp4`: an unchanged copy of the supplied `Diwali_Dynamic_Background.mp4`, continuously looped and muted. Transparent sky and a minimal edge vignette leave the original city visible.
 - `public/assets/crackers-reference.png`: the supplied four-cracker reference, sampled directly as an atlas without replacing the original designs.
-- Foreground city, material textures, lanterns, fairy lights, diyas, smoke, particles and celebration fireworks: Canvas 2D drawings.
+- Pixel art launcher, material textures, obstacles, rubble, sparks and celebration fireworks: Canvas 2D drawings. Decorative foreground diyas have been removed; earned diya awards remain in the menus.
 - Original festive pentatonic instrumental loop and launch, explosion, crumbling and celebration sounds: synthesized locally with Web Audio. Independent music and sound switches.
 
 ## Contributing

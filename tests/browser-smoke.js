@@ -1,74 +1,78 @@
 import {chromium} from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
-const screenshotDir = path.resolve('test-results');
-fs.mkdirSync(screenshotDir,{recursive:true});
 import assert from 'node:assert/strict';
-(async()=>{
- const browser=await chromium.launch({headless:true,executablePath: process.env.CHROME_PATH || (process.platform === 'win32' ? 'C:/Program Files/Google/Chrome/Application/chrome.exe' : undefined)});
- try {
+import {WORLD} from '../src/config.js';
+
+const screenshots=path.resolve('test-results');
+fs.mkdirSync(screenshots,{recursive:true});
+const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH || (process.platform==='win32'?'C:/Program Files/Google/Chrome/Application/chrome.exe':undefined)});
+try {
   const page=await browser.newPage({viewport:{width:1440,height:900}});
-  const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+  const errors=[];
+  page.on('pageerror',e=>errors.push(String(e)));
   await page.goto(process.env.GAME_URL || 'http://localhost:5173/',{waitUntil:'networkidle'});
+  await page.waitForFunction(()=>document.querySelector('video').readyState>2 && document.querySelector('video').currentTime>0);
+  assert.equal(await page.locator('video').evaluate(v=>new URL(v.currentSrc).pathname.endsWith('/assets/diwali-background.mp4')),true);
+  await page.screenshot({path:path.join(screenshots,'start.png')});
   await page.getByRole('button',{name:'How to play',exact:true}).click();
   await page.getByRole('button',{name:'GOT IT'}).click();
   await page.getByRole('button',{name:'Choose a level',exact:true}).click();
   assert.equal(await page.locator('.level-card').count(),8);
   assert.equal(await page.locator('.level-card:disabled').count(),7);
   await page.locator('[data-level="1"]').click();
-  assert.equal(await page.evaluate(()=>window.__patakha.getState().mode),'unlock');
   await page.getByRole('button',{name:'LET’S LIGHT IT UP'}).click();
-  await page.screenshot({path:path.join(screenshotDir,'play.png')});
   await page.getByRole('button',{name:'Pause game',exact:true}).click();
   assert.equal(await page.evaluate(()=>window.__patakha.getState().mode),'pause');
   await page.getByRole('button',{name:'BACK TO THE DHAMAKA'}).click();
   await page.getByRole('button',{name:'How to play',exact:true}).click();
   await page.getByRole('button',{name:'GOT IT'}).click();
   assert.equal(await page.evaluate(()=>window.__patakha.getState().mode),'play');
+
   const box=await page.locator('#game-canvas').boundingBox();
-  const scale=Math.min(box.width/1440,box.height/810),ox=box.x+(box.width-1440*scale)/2,oy=box.y+(box.height-810*scale)/2;
-  await page.mouse.move(ox+235*scale,oy+450*scale);await page.mouse.down();
-  await page.mouse.move(ox+120*scale,oy+450*scale,{steps:12});
-  const aiming=await page.evaluate(()=>window.__patakha.getState().aim);
-  assert.equal(Math.round(aiming.velocity.x),23);assert.ok(aiming.points.length>20);
-  await page.screenshot({path:path.join(screenshotDir,'aim.png')});
+  const scale=Math.min(box.width/WORLD.width,box.height/WORLD.height);
+  const ox=box.x+(box.width-WORLD.width*scale)/2,oy=box.y+(box.height-WORLD.height*scale)/2;
+  async function drag(pull) {
+    await page.mouse.move(ox+WORLD.launcher.x*scale,oy+WORLD.launcher.y*scale);
+    await page.mouse.down();
+    await page.mouse.move(ox+(WORLD.launcher.x+pull.x)*scale,oy+(WORLD.launcher.y+pull.y)*scale,{steps:10});
+  }
+  await drag({x:-24,y:0});
+  const weakAim=await page.evaluate(()=>window.__patakha.getState().aim);
+  assert.ok(weakAim.power<=21);
   await page.mouse.up();
-  assert.equal(await page.evaluate(()=>window.__patakha.getState().physics.shotsUsed),1);
-  await page.waitForFunction(()=>window.__patakha.getState().mode==='result',{},{timeout:25000});
-  const result=await page.evaluate(()=>{
-   const s=window.__patakha.getState();return {mode:s.mode,status:s.physics.status,progress:s.physics.progress,unlocked:s.save.unlocked,best:s.save.best[1]};
-  });
-  assert.equal(result.status,'won');assert.equal(result.unlocked,2);assert.equal(result.best.diyas,3);
-  await page.screenshot({path:path.join(screenshotDir,'result.png')});
-  await page.getByRole('button',{name:'NEXT SKYLINE'}).click();
-  assert.equal(await page.evaluate(()=>window.__patakha.getState().level),2);
+  await page.waitForFunction(()=>window.__patakha.getState().physics.status==='ready' || window.__patakha.getState().mode==='result',{},{timeout:20000});
+  const weak=await page.evaluate(()=>({progress:window.__patakha.getState().physics.progress,status:window.__patakha.getState().physics.status,shots:window.__patakha.getState().physics.shotsUsed}));
+  assert.equal(weak.status,'ready');assert.ok(weak.progress<15);assert.equal(weak.shots,1);
+
   await page.getByRole('button',{name:'Restart level',exact:true}).click();
-  assert.equal(await page.evaluate(()=>window.__patakha.getState().physics.shotsUsed),0);
-  await page.getByRole('button',{name:'Turn music off',exact:true}).click();
-  await page.getByRole('button',{name:'Turn sound effects off',exact:true}).click();
-  assert.equal(await page.evaluate(()=>window.__patakha.getState().save.music),false);
-  assert.equal(await page.evaluate(()=>window.__patakha.getState().save.sound),false);
-  await page.reload({waitUntil:'networkidle'});
-  assert.equal(await page.evaluate(()=>window.__patakha.getState().save.unlocked),2);
-  assert.equal(await page.evaluate(()=>window.__patakha.getState().save.music),false);
-  assert.equal(await page.evaluate(()=>window.__patakha.getState().save.sound),false);
-  await page.getByRole('button',{name:'LET’S KEEP GOING'}).click();
-  await page.mouse.move(ox+235*scale,oy+450*scale);await page.mouse.down();await page.mouse.move(ox+120*scale,oy+465*scale,{steps:6});await page.mouse.up();
+  await drag({x:-112,y:28});
+  const aim=await page.evaluate(()=>window.__patakha.getState().aim);
+  assert.ok(aim.velocity.x>29 && aim.points.length>40);
+  await page.screenshot({path:path.join(screenshots,'aim.png')});
+  await page.mouse.up();
   await page.getByRole('button',{name:'BOOST ROCKET'}).click();
   assert.equal(await page.evaluate(()=>window.__patakha.physics.projectile.plugin.activated),true);
   await page.getByRole('button',{name:'Pause game',exact:true}).click();
-  const before=await page.evaluate(()=>window.__patakha.physics.projectile.position.x);
-  await page.waitForTimeout(350);
-  assert.equal(await page.evaluate(()=>window.__patakha.physics.projectile.position.x),before);
+  const pausedX=await page.evaluate(()=>window.__patakha.physics.projectile.position.x);
+  await page.waitForTimeout(250);
+  assert.equal(await page.evaluate(()=>window.__patakha.physics.projectile.position.x),pausedX);
   await page.getByRole('button',{name:'BACK TO THE DHAMAKA'}).click();
-  // Exhaust a level with legal deliberate misses, advancing only the simulation to keep QA short.
-  await page.evaluate(()=>{const game=window.__patakha.physics;game.load(game.level);for(let shot=0;shot<game.level.shots;shot++){game.launch('rocket',{x:2,y:-2});for(let i=0;i<700&&['flight','settling'].includes(game.status);i++)game.update(1000/60);}});
+  await page.getByRole('button',{name:'Restart level',exact:true}).click();
+
+  // Physics tests prove legal winning solutions; here deliberate misses check
+  // the browser's ammo, loss/result and retry transitions without long waits.
+  await page.evaluate(()=>{const game=window.__patakha.physics;for(let shot=0;shot<game.level.shots;shot++){game.launch('rocket',{x:2,y:-2});for(let i=0;i<750&&['flight','settling'].includes(game.status);i++)game.update(1000/60);}});
   await page.waitForFunction(()=>window.__patakha.getState().mode==='result');
   assert.equal(await page.evaluate(()=>window.__patakha.getState().physics.status),'lost');
   await page.getByRole('button',{name:'TRY THAT SHOT AGAIN'}).click();
-  assert.equal(await page.evaluate(()=>window.__patakha.getState().physics.remaining),3);
-  assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({passed:true,result,checks:['start/help/level-locks','unlock','pause/help/resume','real pointer aim and release','trajectory','one-shot win/three diyas','next/restart','music/sound persistence','rocket ability','paused physics','loss/retry'],errors}));
- } finally {await browser.close();}
-})();
+  assert.equal(await page.evaluate(()=>window.__patakha.getState().physics.shotsUsed),0);
 
+  await page.getByRole('button',{name:'Turn music off',exact:true}).click();
+  await page.getByRole('button',{name:'Turn sound effects off',exact:true}).click();
+  await page.reload({waitUntil:'networkidle'});
+  assert.equal(await page.evaluate(()=>window.__patakha.getState().save.music),false);
+  assert.equal(await page.evaluate(()=>window.__patakha.getState().save.sound),false);
+  assert.deepEqual(errors,[]);
+  console.log(JSON.stringify({passed:true,weak,checks:['actual uploaded video playback','start/help/locked levels','pause/resume','real weak drag fails to collapse skyline','long range trajectory','rocket ability','paused flight','retry','audio persistence'],errors}));
+} finally {await browser.close();}

@@ -5,8 +5,9 @@ import {SceneRenderer} from './art.js';
 import {GameUI} from './ui.js';
 import {GameAudio} from './audio.js';
 import {loadSave, writeSave, awardDiyas, recordResult} from './progress.js';
+import {WORLD} from './config.js';
 
-const LAUNCHER = {x: 235, y: 450};
+const LAUNCHER = WORLD.launcher;
 let save = loadSave();
 let level = LEVELS[0];
 let selected = 'rocket';
@@ -77,6 +78,7 @@ function startLevel(id) {
   pointerId = null;
   resultShown = false;
   celebrating = false;
+  slowMotion = 0;
   mode = 'play';
   ui.showScreen('play');
   updateUI();
@@ -144,17 +146,18 @@ const canvas=ui.canvas || document.getElementById('game-canvas');
 function worldPoint(e) {
   if (renderer.toWorld) return renderer.toWorld(e.clientX,e.clientY);
   const rect=canvas.getBoundingClientRect();
-  const scale=Math.min(rect.width/1440,rect.height/810);
-  return {x:(e.clientX-rect.left-(rect.width-1440*scale)/2)/scale,y:(e.clientY-rect.top-(rect.height-810*scale)/2)/scale};
+  const scale=Math.min(rect.width/WORLD.width,rect.height/WORLD.height);
+  return {x:(e.clientX-rect.left-(rect.width-WORLD.width*scale)/2)/scale,y:(e.clientY-rect.top-(rect.height-WORLD.height*scale)/2)/scale};
 }
 
 function makeAim(point) {
   let pull={x:Math.min(-6,point.x-LAUNCHER.x),y:point.y-LAUNCHER.y};
   let length=Math.hypot(pull.x,pull.y);
-  if (length>120) {pull.x*=120/length;pull.y*=120/length;}
+  if (length>WORLD.maxPull) {pull.x*=WORLD.maxPull/length;pull.y*=WORLD.maxPull/length;}
   pull.y=Math.max(-70,Math.min(110,pull.y));
-  const velocity={x:-pull.x*.2,y:-pull.y*.2};
-  return {pull,velocity,points:predictTrajectory(velocity),power:Math.min(100,Math.round(Math.hypot(pull.x,pull.y)/120*100))};
+  const speedScale=WORLD.maxSpeed/WORLD.maxPull;
+  const velocity={x:-pull.x*speedScale,y:-pull.y*speedScale};
+  return {pull,velocity,points:predictTrajectory(velocity),power:Math.min(100,Math.round(Math.hypot(pull.x,pull.y)/WORLD.maxPull*100))};
 }
 
 canvas.addEventListener('pointerdown',e=>{

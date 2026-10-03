@@ -1,137 +1,97 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { GamePhysics, predictTrajectory, FIXED_STEP } from '../src/physics.js';
-import { LEVELS } from '../src/levels.js';
+import Matter from 'matter-js';
+import {GamePhysics,predictTrajectory,FIXED_STEP,MATERIALS,getDamageMultiplier} from '../src/physics.js';
+import {LEVELS,LEVEL_SOLUTIONS} from '../src/levels.js';
+import {WORLD} from '../src/config.js';
 
-const supportHouse = () => ({
-  shots: 3, unlockedTypes: ['rocket', 'sutli', 'chakri', 'ladi'],
-  pieces: [
-    { x: 884, y: 611, w: 24, h: 78, material: 'wood', weak: true, group: 'house' },
-    { x: 1036, y: 611, w: 24, h: 78, material: 'wood', group: 'house' },
-    { x: 960, y: 566, w: 196, h: 14, material: 'brick', group: 'house' },
-    ...Array.from({ length: 3 }, (_, i) => ({
-      x: 892 + i * 68, y: 532, w: 60, h: 54, material: 'brick', group: 'house',
-    })),
-    { x: 960, y: 496, w: 210, h: 15, material: 'wood', group: 'house' },
-  ],
-});
-
-function settle(game) {
-  for (let i = 0; i < 650 && ['flight', 'settling'].includes(game.status); i++) game.update(FIXED_STEP);
-}
-
-test('dotted preview follows the actual Matter.js projectile at a fixed timestep', () => {
-  const game = new GamePhysics({ shots: 1, pieces: [], unlockedTypes: ['rocket'] });
-  const velocity = { x: 16, y: -9 };
-  const preview = predictTrajectory(velocity, 30);
-  assert.equal(game.launch('rocket', velocity), true);
-  for (const predicted of preview.slice(1)) {
+function playShot(game,action) {
+  assert.equal(game.launch(action.type,{x:action.vx,y:action.vy}),true);
+  let activated=false;
+  for(let i=0;i<650&&['flight','settling'].includes(game.status);i++) {
+    if(!activated&&action.activateX&&game.projectile?.position.x>=action.activateX){game.activate();activated=true;}
     game.update(FIXED_STEP);
-    assert.ok(Math.hypot(game.projectile.position.x - predicted.x, game.projectile.position.y - predicted.y) < 0.001);
   }
-  game.destroy();
+  assert.ok(!['flight','settling'].includes(game.status),'every shot has a bounded settling phase');
+}
+const fixture=material=>({shots:4,unlockedTypes:['rocket','sutli','chakri','ladi'],pieces:[{x:1410,y:730,w:100,h:100,kind:'wall',material,group:0}]});
+
+test('trajectory preview exactly matches actual Matter.js flight over the longer world',()=>{
+  const g=new GamePhysics({shots:1,pieces:[],unlockedTypes:['rocket']});
+  const v={x:28,y:-10};const points=predictTrajectory(v,45);
+  assert.equal(g.launch('rocket',v),true);
+  for(const point of points.slice(1)) {g.update(FIXED_STEP);assert.ok(Math.hypot(g.projectile.position.x-point.x,g.projectile.position.y-point.y)<0.001);}
+  assert.equal(points[0].x,WORLD.launcher.x);
+  g.destroy();
 });
 
-test('an untouched structure cannot silently lose health while waiting for a shot', () => {
-  const game = new GamePhysics(supportHouse());
-  for (let i = 0; i < 1200; i++) game.update(FIXED_STEP);
-  assert.equal(game.progress, 0);
-  assert.equal(game.score, 0);
-  assert.ok(game.bodies.every(body => body.plugin.health === body.plugin.maxHealth));
-  game.destroy();
-});
-
-test('a precise support shot collapses a real multi-body house and clears 90 percent', () => {
-  const events = [];
-  const game = new GamePhysics(supportHouse(), event => events.push(event));
-  game.launch('rocket', { x: 23, y: 0 });
-  settle(game);
-  assert.equal(game.status, 'won');
-  assert.ok(game.progress >= 90);
-  assert.equal(game.shotsUsed, 1);
-  assert.ok(events.some(event => event.type === 'damage' && event.reason === 'collapse'));
-  assert.equal(events.filter(event => event.type === 'win').length, 1);
-  game.destroy();
-});
-
-test('the four cracker abilities have separate observable mechanics', () => {
-  const rocket = new GamePhysics(supportHouse());
-  rocket.launch('rocket', { x: 16, y: -8 });
-  const initialSpeed = rocket.projectile.speed;
-  assert.equal(rocket.activate(), true);
-  assert.ok(rocket.projectile.speed > initialSpeed * 1.5);
-  assert.equal(rocket.activate(), false);
-  rocket.destroy();
-
-  const bombEvents = [];
-  const bomb = new GamePhysics(supportHouse(), event => bombEvents.push(event));
-  bomb.launch('sutli', { x: 16, y: -8 });
-  bomb.activate();
-  assert.equal(bomb.projectile, null);
-  assert.ok(bombEvents.some(event => event.type === 'explosion' && event.radius > 230));
-  bomb.destroy();
-
-  const chakriEvents = [];
-  const chakri = new GamePhysics(supportHouse(), event => chakriEvents.push(event));
-  chakri.launch('chakri', { x: 23, y: 0 });
-  settle(chakri);
-  assert.ok(chakriEvents.filter(event => event.type === 'explosion' && event.cracker === 'chakri').length > 6);
-  chakri.destroy();
-
-  const ladiEvents = [];
-  const ladi = new GamePhysics(supportHouse(), event => ladiEvents.push(event));
-  ladi.launch('ladi', { x: 23, y: 0 });
-  settle(ladi);
-  const pops = ladiEvents.filter(event => event.type === 'explosion' && event.cracker === 'ladi');
-  assert.equal(pops.length, 7);
-  assert.ok(pops.at(-1).x > pops[0].x + 150);
-  assert.ok(pops.at(-1).time >= pops[0].time + 900);
-  ladi.destroy();
-});
-
-test('shots always finish, inventory cannot be overspent, and zero damage yields a retry', () => {
-  const game = new GamePhysics({ ...supportHouse(), shots: 1 });
-  assert.equal(game.launch('rocket', { x: -10, y: 0 }), false);
-  assert.equal(game.launch('rocket', { x: NaN, y: 0 }), false);
-  assert.equal(game.launch('rocket', { x: 2, y: -10 }), true);
-  assert.equal(game.launch('rocket', { x: 23, y: 0 }), false);
-  settle(game);
-  assert.equal(game.status, 'lost');
-  assert.equal(game.getState().remaining, 0);
-  assert.equal(game.launch('rocket', { x: 23, y: 0 }), false);
-  game.destroy();
-});
-
-test('all eight authored structures begin upright and have a reproducible legal winning shot', () => {
-  assert.equal(LEVELS.length, 8);
-  for (const level of LEVELS) {
-    const game = new GamePhysics(level);
-    assert.equal(game.progress, 0, `level ${level.id} starts undamaged`);
-    for (const body of game.bodies) {
-      const { piece } = body.plugin;
-      assert.ok(Math.hypot(body.position.x - piece.x, body.position.y - piece.y) < 15,
-        `level ${level.id} ${piece.kind} must be physically supported before launch`);
-    }
-    const velocity = { x: 23, y: level.id >= 7 ? -4 : 0 };
-    const type = level.unlockedTypes.at(-1);
-    assert.equal(game.launch(type, velocity), true);
-    settle(game);
-    assert.equal(game.status, 'won', `level ${level.id} can be won with ${type}`);
-    assert.ok(game.progress >= 90);
-    assert.ok(game.shotsUsed <= level.par);
-    game.destroy();
+test('authored structures begin upright, untouched and far from the launcher',()=>{
+  assert.equal(LEVELS.length,8);
+  for(const level of LEVELS) {
+    const g=new GamePhysics(level);
+    for(const b of g.bodies){const p=b.plugin;assert.equal(p.health,p.maxHealth);assert.ok(Math.hypot(b.position.x-p.piece.x,b.position.y-p.piece.y)<25);assert.ok(Math.abs(b.angle)<0.12);assert.ok(p.piece.x-p.piece.w/2>=1250);}
+    for(let f=0;f<1200;f++)g.update(FIXED_STEP);
+    assert.equal(g.progress,0);assert.equal(g.score,0);g.destroy();
   }
 });
 
-test('late-level gateways require an elevated shot and are excluded from destruction scores', () => {
-  for (const level of LEVELS.slice(6)) {
-    const game = new GamePhysics(level);
-    assert.ok(game.obstacles.length > 0);
-    game.launch('ladi', { x: 23, y: 0 });
-    settle(game);
-    assert.equal(game.status, 'ready', `level ${level.id} low shot cannot earn a perfect clear`);
-    assert.ok(game.progress < 90);
-    assert.ok(game.obstacles.every(body => body.isStatic && !body.plugin.destroyed));
-    game.destroy();
+test('weak launches and their activated abilities cannot topple any authored building',()=>{
+  for(const level of LEVELS)for(const type of level.unlockedTypes) {
+    const g=new GamePhysics(level);g.launch(type,{x:7,y:-1});
+    for(let i=0;i<650&&['flight','settling'].includes(g.status);i++){if(i===10)g.activate();g.update(FIXED_STEP);}
+    assert.ok(g.progress<5,`weak ${type} level ${level.id} does negligible damage`);
+    assert.ok(g.bodies.every(b=>!b.plugin.destroyed));assert.equal(g.status,'ready');g.destroy();
+  }
+});
+
+test('gentle rocking and small displacement do not instantly destroy a target',()=>{
+  const g=new GamePhysics({...fixture('brick'),pieces:[{x:1410,y:750,w:240,h:60,kind:'wall',material:'brick',group:0}]});
+  Matter.Body.setPosition(g.bodies[0],{x:1418,y:750});Matter.Body.setAngle(g.bodies[0],0.38);
+  playShot(g,{type:'rocket',vx:5,vy:-8});
+  assert.equal(g.bodies[0].plugin.destroyed,false);assert.ok(g.progress<35);g.destroy();
+});
+
+test('actual blast damage and impulse depend on energy and material resistance',()=>{
+  const weak=new GamePhysics(fixture('wood'));const before={...weak.bodies[0].position};
+  weak._explode(1410,730,150,100,'chakri',{energy:0.04});
+  assert.equal(weak.bodies[0].plugin.destroyed,false);assert.ok(weak.bodies[0].speed<0.3);assert.ok(weak.bodies[0].plugin.health>weak.bodies[0].plugin.maxHealth*0.8);assert.deepEqual(weak.bodies[0].position,before);weak.destroy();
+  const wood=new GamePhysics(fixture('wood'));wood._explode(1410,730,150,100,'chakri',{energy:1});assert.equal(wood.bodies[0].plugin.destroyed,true);wood.destroy();
+  const steel=new GamePhysics(fixture('metal'));steel._explode(1410,730,150,100,'chakri',{energy:1});assert.ok(steel.bodies[0].plugin.health>steel.bodies[0].plugin.maxHealth*0.9);steel.destroy();
+  assert.ok(getDamageMultiplier('brick','sutli')>getDamageMultiplier('brick','chakri'));
+  assert.ok(getDamageMultiplier('metal','rocket',true)>getDamageMultiplier('metal','rocket')*5);
+  assert.ok(MATERIALS.concrete.health>MATERIALS.wood.health);
+});
+
+test('the four firecrackers expose four different mechanics',()=>{
+  const rocket=new GamePhysics(LEVELS[0]);rocket.launch('rocket',{x:28,y:-8});const speed=rocket.projectile.speed;assert.equal(rocket.activate(),true);assert.ok(rocket.projectile.speed>speed*1.5);assert.equal(rocket.activate(),false);rocket.destroy();
+  const explosions=[];const bomb=new GamePhysics(LEVELS[2],e=>explosions.push(e));bomb.launch('sutli',{x:32,y:0});bomb.activate();assert.equal(bomb.projectile,null);assert.ok(explosions.some(e=>e.type==='explosion'&&e.radius>=200));bomb.destroy();
+  const spins=[];const chakri=new GamePhysics(LEVELS[4],e=>spins.push(e));playShot(chakri,{type:'chakri',vx:32,vy:0});assert.ok(spins.filter(e=>e.type==='explosion'&&e.cracker==='chakri').length>6);chakri.destroy();
+  const events=[];const ladi=new GamePhysics(LEVELS[5],e=>events.push(e));playShot(ladi,{type:'ladi',vx:28,vy:-6});const pops=events.filter(e=>e.type==='explosion'&&e.cracker==='ladi');assert.equal(pops.length,7);assert.ok(pops.at(-1).x>pops[0].x+100);assert.ok(pops.at(-1).time>=pops[0].time+900);ladi.destroy();
+});
+
+test('obstacles stay physical and boosted rockets cannot ghost through them',()=>{
+  const level={...fixture('wood'),obstacles:[{x:400,y:520,w:40,h:260,kind:'wall',material:'concrete'}]};
+  const g=new GamePhysics(level);g.launch('rocket',{x:32,y:0});g.activate();
+  let farthest=0;for(let i=0;i<650&&['flight','settling'].includes(g.status);i++){if(g.projectile)farthest=Math.max(farthest,g.projectile.position.x);g.update(FIXED_STEP);}
+  assert.ok(farthest<450);assert.ok(g.obstacles.every(b=>b.isStatic&&!b.plugin.destroyed));assert.equal(g.progress,0);g.destroy();
+});
+
+test('misses consume ammunition, end in a retry, and inventory cannot be overspent',()=>{
+  const g=new GamePhysics({...LEVELS[0],shots:2});
+  assert.equal(g.launch('rocket',{x:-4,y:0}),false);assert.equal(g.launch('rocket',{x:NaN,y:0}),false);
+  playShot(g,{type:'rocket',vx:5,vy:-10});assert.equal(g.status,'ready');
+  playShot(g,{type:'rocket',vx:5,vy:-10});assert.equal(g.status,'lost');assert.equal(g.progress,0);assert.equal(g.getState().remaining,0);assert.equal(g.launch('rocket',{x:32,y:0}),false);g.destroy();
+});
+
+test('early support puzzle requires real shots rather than idle damage',()=>{
+  const g=new GamePhysics(LEVELS[0]);playShot(g,{type:'rocket',vx:32,vy:-3,activateX:1120});assert.equal(g.status,'ready');assert.ok(g.progress>50&&g.progress<90);playShot(g,{type:'rocket',vx:28,vy:2,activateX:1120});assert.equal(g.status,'won');assert.ok(g.progress>=90);g.destroy();
+});
+
+test('checked-in level solutions clear each authored puzzle within its ammunition budget',()=>{
+  for(const [id,actions] of Object.entries(LEVEL_SOLUTIONS)){
+    const level=LEVELS.find(l=>l.id===Number(id));const g=new GamePhysics(level);
+    assert.ok(actions.length<=level.shots);
+    for(const action of actions){if(g.status==='won')break;playShot(g,action);}
+    assert.equal(g.status,'won',`level ${id} has a reproducible legal solution`);assert.ok(g.progress>=90);g.destroy();
   }
 });

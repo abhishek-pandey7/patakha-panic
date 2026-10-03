@@ -1,24 +1,32 @@
 import Matter from 'matter-js';
+import { WORLD } from './config.js';
 
 const { Engine, Bodies, Body, Composite, Events, Sleeping } = Matter;
 
-export const LAUNCHER = Object.freeze({ x: 235, y: 450 });
-export const GROUND_Y = 650;
+export const LAUNCHER = WORLD.launcher;
+export const GROUND_Y = WORLD.ground;
 export const FIXED_STEP = 1000 / 60;
 const AIR = 0.002;
 const GRAVITY = 1;
 const GRAVITY_SCALE = 0.001;
-const MATERIALS = {
-  wood: { health: 46, density: 0.0013, friction: 0.68, points: 110 },
-  brick: { health: 100, density: 0.0020, friction: 0.64, points: 160 },
-  concrete: { health: 185, density: 0.0030, friction: 0.70, points: 240 },
-  metal: { health: 130, density: 0.0026, friction: 0.58, points: 200 },
+export const MATERIALS = {
+  wood: { name:'Wood', health:60, density:0.0015, friction:0.76, points:110,
+    resistance:{rocket:1,boostedRocket:1.25,sutli:0.95,chakri:1.7,ladi:1.55} },
+  brick: { name:'Brick', health:115, density:0.0025, friction:0.72, points:160,
+    resistance:{rocket:0.75,boostedRocket:1.1,sutli:1.45,chakri:0.6,ladi:0.85} },
+  concrete: { name:'Concrete', health:210, density:0.004, friction:0.82, points:240,
+    resistance:{rocket:0.28,boostedRocket:1.3,sutli:0.9,chakri:0.15,ladi:0.25} },
+  metal: { name:'Steel', health:240, density:0.005, friction:0.78, points:280,
+    resistance:{rocket:0.25,boostedRocket:1.8,sutli:0.6,chakri:0.12,ladi:0.15} },
 };
+export function getDamageMultiplier(material, cracker, boosted = false) {
+  return (MATERIALS[material] || MATERIALS.brick).resistance[boosted && cracker === 'rocket' ? 'boostedRocket' : cracker] ?? 1;
+}
 
 /** Exact free-flight positions for the launcher's Matter.js fixed timestep.
  * Velocity is expressed in pixels per 60 Hz frame, as in Body.setVelocity.
  */
-export function predictTrajectory(velocity, steps = 40) {
+export function predictTrajectory(velocity, steps = 80) {
   let x = LAUNCHER.x;
   let y = LAUNCHER.y;
   let vx = velocity.x;
@@ -30,7 +38,7 @@ export function predictTrajectory(velocity, steps = 40) {
     x += vx;
     y += vy;
     points.push({ x, y });
-    if (y > GROUND_Y || x > 1510 || x < -100) break;
+    if (y > GROUND_Y || x > WORLD.width + 100 || x < -100) break;
   }
   return points;
 }
@@ -71,10 +79,10 @@ export class GamePhysics {
     this.destroyedGroups = new Set();
     this.scheduledPops = [];
     this.initializing = true;
-    const ground = Bodies.rectangle(720, GROUND_Y + 35, 2100, 70, {
+    const ground = Bodies.rectangle(WORLD.width/2, GROUND_Y + 35, WORLD.width + 700, 70, {
       isStatic: true, friction: 0.85, label: 'ground',
     });
-    const rooftop = Bodies.rectangle(169, 576, 196, 164, {
+    const rooftop = Bodies.rectangle(LAUNCHER.x - 60, 670, 180, 270, {
       isStatic: true, friction: 0.8, label: 'launcher-rooftop',
     });
     Composite.add(this.engine.world, [ground, rooftop]);
@@ -86,11 +94,12 @@ export class GamePhysics {
       body.plugin = { piece, obstacle: true, destroyed: false, health: 1, maxHealth: 1,
         original: { x: piece.x, y: piece.y, angle: 0 } };
       this.obstacles.push(body);
+      if (piece.angle) Body.setAngle(body, piece.angle);
       Composite.add(this.engine.world, body);
     }
     for (const piece of level.pieces) {
       const material = MATERIALS[piece.material] || MATERIALS.brick;
-      const maxHealth = piece.health || material.health * (piece.weak ? 0.48 : 1);
+      const maxHealth = piece.health || material.health * (piece.weak ? 0.65 : 1);
       const body = Bodies.rectangle(piece.x, piece.y, piece.w, piece.h, {
         density: material.density,
         friction: material.friction,
@@ -105,7 +114,7 @@ export class GamePhysics {
         piece, health: maxHealth, maxHealth, destroyed: false,
         original: { x: piece.x, y: piece.y, angle: 0 },
         weight: Math.sqrt(piece.w * piece.h), points: material.points,
-        lastHit: -10000, collapsed: false,
+        lastHit: -10000, collapsed: false, strainDamage:0, peakImpact:0,
       };
       this.bodies.push(body);
       Composite.add(this.engine.world, body);
@@ -131,11 +140,11 @@ export class GamePhysics {
     if (!Number.isFinite(velocity?.x) || !Number.isFinite(velocity?.y)) return false;
     const speed = Math.hypot(velocity.x, velocity.y);
     if (speed < 1 || velocity.x <= 0) return false;
-    const scale = Math.min(1, 24 / speed);
+    const scale = Math.min(1, WORLD.maxSpeed / speed);
     const v = { x: velocity.x * scale, y: velocity.y * scale };
     const radius = type === 'sutli' ? 19 : type === 'chakri' ? 20 : 15;
     this.projectile = Bodies.circle(LAUNCHER.x, LAUNCHER.y, radius, {
-      density: type === 'sutli' ? 0.016 : 0.010,
+      density: type === 'sutli' ? 0.009 : 0.006,
       frictionAir: AIR, friction: type === 'chakri' ? 0.07 : 0.3,
       restitution: type === 'chakri' ? 0.22 : 0.05,
       label: `firecracker-${type}`, sleepThreshold: Infinity,
@@ -143,7 +152,9 @@ export class GamePhysics {
     this.projectile.plugin = {
       type, radius, activated: false, impacted: false, born: this.time,
       rollingUntil: 0, pulseAt: 0, detonateAt: 0, hits: 0,
+      launchPower: Math.min(1, speed / WORLD.maxSpeed), energy: Math.min(1, speed / WORLD.maxSpeed) ** 2,
     };
+    if(type==='rocket') this.projectile.collisionFilter.mask = 0xFFFFFFFF & ~0x0004;
     Body.setVelocity(this.projectile, v);
     Body.setAngle(this.projectile, Math.atan2(v.y, v.x));
     Composite.add(this.engine.world, this.projectile);
@@ -169,13 +180,14 @@ export class GamePhysics {
     if (type === 'rocket') {
       const v = projectile.velocity;
       const direction = Math.atan2(v.y, v.x);
-      const speed = Math.max(31, Math.hypot(v.x, v.y) * 1.65);
+      const speed = Math.hypot(v.x, v.y) * 1.55;
+      projectile.plugin.energy = Math.min(1.8, projectile.plugin.energy * 1.8);
       Body.setVelocity(projectile, { x: Math.cos(direction) * speed, y: Math.sin(direction) * speed });
     } else if (type === 'sutli') {
-      this._explode(projectile.position.x, projectile.position.y, 242, 285, type);
+      this._explode(projectile.position.x, projectile.position.y, 210, 270, type, {energy:projectile.plugin.energy});
       this._removeProjectile();
     } else if (type === 'chakri') {
-      Body.setVelocity(projectile, { x: Math.max(12, projectile.velocity.x * 1.2), y: Math.max(3, projectile.velocity.y) });
+      Body.setVelocity(projectile, { x: projectile.velocity.x * 1.12, y: Math.max(2 * projectile.plugin.launchPower, projectile.velocity.y) });
       Body.setAngularVelocity(projectile, 0.6);
     } else if (type === 'ladi') {
       this._startLadi(projectile.position.x, projectile.position.y);
@@ -204,7 +216,7 @@ export class GamePhysics {
       const pop = this.scheduledPops[i];
       if (this.time >= pop.at) {
         this.scheduledPops.splice(i, 1);
-        this._explode(pop.x, pop.y, pop.radius, pop.strength, 'ladi');
+        this._explode(pop.x, pop.y, pop.radius, pop.strength, 'ladi', {energy:pop.energy});
       }
     }
     for (const body of this.bodies) {
@@ -213,16 +225,25 @@ export class GamePhysics {
       const displacement = Math.hypot(body.position.x - p.original.x, body.position.y - p.original.y);
       const tilt = Math.abs(body.angle - p.original.angle);
       const fall = body.position.y - p.original.y;
-      // Count unusable, toppled building pieces as destroyed structure while
-      // retaining their physical rubble for secondary impacts and dominoes.
-      if (displacement > Math.max(35, Math.min(p.piece.w, p.piece.h) * 0.7) || tilt > 0.34 || fall > 28) {
+      const bottom = Math.max(...body.vertices.map(v=>v.y));
+      // A rocking wall is still a wall. Only a substantial fall into street
+      // rubble counts as a complete structural collapse; lesser movement
+      // produces bounded, proportional strain damage instead.
+      if (bottom > GROUND_Y - 65 && fall > Math.max(85, p.piece.h * 1.15) && (p.peakImpact > 3.2 || tilt > 0.85)) {
         this._damage(body, p.maxHealth, 'collapse');
+      } else {
+        const strain = Math.min(0.32, Math.max(0, displacement - 60) / 600 + Math.max(0, tilt - 0.65) * 0.12);
+        const desired = p.maxHealth * strain;
+        if (desired > p.strainDamage) {
+          this._damage(body, desired - p.strainDamage, 'strain');
+          p.strainDamage = desired;
+        }
       }
     }
     this._updateProgress();
     if (this.projectile && this.shotTime > 5600) {
       const { x, y } = this.projectile.position;
-      if (this.projectile.plugin.type === 'sutli') this._explode(x, y, 242, 285, 'sutli');
+      if (this.projectile.plugin.type === 'sutli') this._explode(x, y, 210, 270, 'sutli', {energy:this.projectile.plugin.energy});
       else if (this.projectile.plugin.type === 'ladi') this._startLadi(x, y);
       this._removeProjectile();
     }
@@ -250,24 +271,25 @@ export class GamePhysics {
     if (p.type === 'rocket') {
       Body.setAngle(projectile, Math.atan2(projectile.velocity.y, projectile.velocity.x));
       if (p.detonateAt && this.time >= p.detonateAt) {
-        this._explode(x, y, 162, 210, 'rocket');
+        this._explode(x, y, 88, 160, 'rocket', {energy:p.energy,boosted:true});
         this._removeProjectile();
         return;
       }
     } else if (p.type === 'chakri' && p.rollingUntil) {
       Body.setAngularVelocity(projectile, 0.55);
-      if (projectile.velocity.x < 10) Body.setVelocity(projectile, { x: 10, y: projectile.velocity.y });
+      const rollingSpeed = 15 * p.launchPower;
+      if (projectile.velocity.x < rollingSpeed) Body.setVelocity(projectile, { x: rollingSpeed, y: projectile.velocity.y });
       if (this.time >= p.pulseAt) {
         p.pulseAt = this.time + 165;
-        this._explode(x, y, 112, 62, 'chakri', 0.45);
+        this._explode(x, y, 82, 48, 'chakri', {energy:p.energy,impulse:0.4});
       }
       if (this.time >= p.rollingUntil) {
-        this._explode(x, y, 125, 85, 'chakri');
+        this._explode(x, y, 88, 72, 'chakri', {energy:p.energy});
         this._removeProjectile();
         return;
       }
     }
-    if (x > 1550 || x < -150 || y > 850) this._removeProjectile();
+    if (x > WORLD.width + 150 || x < -150 || y > WORLD.height + 100) this._removeProjectile();
   }
 
   _onCollision({ pairs }) {
@@ -282,43 +304,53 @@ export class GamePhysics {
         if (!p.impacted) {
           p.impacted = true;
           const { x, y } = projectile.position;
+          const speed = Math.hypot((p.priorVelocity || projectile.velocity).x, (p.priorVelocity || projectile.velocity).y);
+          p.energy *= Math.min(1.25, (speed / Math.max(1, p.launchPower * WORLD.maxSpeed * (p.activated && p.type==='rocket' ? 1.55 : 1))) ** 2);
           if (p.type === 'sutli') {
-            this._explode(x, y, 242, 285, 'sutli');
+            this._explode(x, y, 210, 270, 'sutli', {energy:p.energy});
             this._removeProjectile();
           } else if (p.type === 'rocket' && p.activated) {
-            if (other.plugin.piece) this._damage(other, 290, 'rocket');
-            p.detonateAt = this.time + 125;
-            const v = p.priorVelocity || projectile.velocity;
-            Body.setVelocity(projectile, { x: Math.max(19, v.x * 0.8), y: v.y * 0.7 });
-            projectile.isSensor = true;
-            this._emit({ type: 'explosion', cracker: 'rocket', x, y, radius: 54, power: 0.6 });
+            if (other.plugin.piece && !other.plugin.obstacle) this._damage(other, 240 * p.energy * getDamageMultiplier(other.plugin.piece.material,'rocket',true), 'boostedRocket');
+            if (other.plugin.destroyed && !other.plugin.obstacle) {
+              p.detonateAt = this.time + 80;
+              const v = p.priorVelocity || projectile.velocity;
+              Body.setVelocity(projectile, { x: v.x * 0.75, y: v.y * 0.75 });
+              projectile.isSensor = true;
+              this._emit({ type: 'explosion', cracker: 'rocket', x, y, radius: 40, power:p.energy });
+            } else {
+              this._explode(x,y,88,160,'rocket',{energy:p.energy,boosted:true});
+              this._removeProjectile();
+            }
           } else if (p.type === 'rocket') {
-            if (other.plugin.piece) this._damage(other, 150, 'rocket');
-            this._explode(x, y, 112, 155, 'rocket');
+            if (other.plugin.piece) this._damage(other, 95 * p.energy * getDamageMultiplier(other.plugin.piece.material,'rocket'), 'rocket');
+            this._explode(x, y, 105, 105, 'rocket', {energy:p.energy});
             this._removeProjectile();
           } else if (p.type === 'chakri') {
-            p.rollingUntil = this.time + 2300;
+            p.rollingUntil = this.time + 2400;
             p.pulseAt = this.time;
-            if (other.plugin.piece) this._damage(other, 115, 'chakri');
-            Body.setVelocity(projectile, { x: 12, y: -0.5 });
+            if (other.plugin.piece) this._damage(other, 80 * p.energy * getDamageMultiplier(other.plugin.piece.material,'chakri'), 'chakri');
+            Body.setVelocity(projectile, { x: 15 * p.launchPower, y: -0.5 * p.launchPower });
             Body.setAngularVelocity(projectile, 0.55);
             this._emit({ type: 'ability', cracker: 'chakri', x, y, message: 'Spin to win!' });
           } else if (p.type === 'ladi') this._startLadi(x, y);
         } else if (p.type === 'chakri' && other.plugin.piece) {
-          this._damage(other, 55, 'chakri');
+          this._damage(other, 32 * p.energy * getDamageMultiplier(other.plugin.piece.material,'chakri'), 'chakri');
         }
       }
       const va = a.plugin.priorVelocity || a.velocity;
       const vb = b.plugin.priorVelocity || b.velocity;
       const normal = pair.collision.normal;
       const relativeSpeed = Math.abs((va.x - vb.x) * normal.x + (va.y - vb.y) * normal.y);
-      if (relativeSpeed < 2.35) continue;
+      if (a === projectile || b === projectile) continue;
+      if (relativeSpeed < 3.1) continue;
       for (const [body, other] of [[a, b], [b, a]]) {
-        if (!body.plugin.piece || body.plugin.destroyed) continue;
+        if (!body.plugin.piece || body.plugin.obstacle || body.plugin.destroyed) continue;
+        body.plugin.peakImpact = Math.max(body.plugin.peakImpact, relativeSpeed);
         if (this.time - body.plugin.lastHit < 100) continue;
         body.plugin.lastHit = this.time;
         const massRatio = other.isStatic ? 1 : Math.min(2.4, Math.max(0.35, other.mass / body.mass));
-        const damage = (relativeSpeed - 1.6) * 9 * massRatio;
+        const toughness = {wood:1,brick:0.8,concrete:0.48,metal:0.32}[body.plugin.piece.material] || 1;
+        const damage = Math.min(100, (relativeSpeed - 2.6) ** 1.5 * 5 * massRatio * toughness);
         this._damage(body, damage, 'collision');
       }
     }
@@ -329,39 +361,47 @@ export class GamePhysics {
     // blast. Shops close together can knock into each other between the pops.
     const velocityX = this.projectile?.velocity.x || 10;
     const velocityY = this.projectile?.velocity.y || 0;
+    const energy = this.projectile?.plugin.energy || 0;
     const airborne = y < GROUND_Y - 85;
     for (let i = 0; i < 7; i++) {
       this.scheduledPops.push({
         at: this.time + i * 155,
-        x: x + i * Math.max(26, Math.min(45, velocityX * 2.5)),
+        x: x + i * Math.max(0, Math.min(26, velocityX * 1.1)),
         y: Math.min(GROUND_Y - 15, y + (airborne ? i * Math.max(5, velocityY * 2) + i * i * 2 : 0)),
-        radius: 118, strength: 100,
+        radius: 88, strength: 72, energy,
       });
     }
     this._removeProjectile();
   }
 
-  _explode(x, y, radius, strength, cracker, impulseScale = 1) {
-    this._emit({ type: 'explosion', cracker, x, y, radius, power: impulseScale });
+  _explode(x, y, radius, strength, cracker, options = {}) {
+    const energy = options.energy ?? 1;
+    const impulseScale = options.impulse ?? 1;
+    radius *= Math.min(1.12, Math.sqrt(energy));
+    this._emit({ type: 'explosion', cracker, x, y, radius, power:energy * impulseScale });
     for (const body of this.bodies) {
       const dx = body.position.x - x;
       const dy = body.position.y - y;
       const distance = Math.hypot(dx, dy);
       // Account for a piece's closest edge, so a large slab can be hit near its end.
-      const edgeDistance = Math.max(0, distance - Math.min(body.plugin.piece.w, body.plugin.piece.h) * 0.33);
+      const localX = dx*Math.cos(body.angle)+dy*Math.sin(body.angle);
+      const localY = -dx*Math.sin(body.angle)+dy*Math.cos(body.angle);
+      const edgeDistance = Math.hypot(Math.max(0,Math.abs(localX)-body.plugin.piece.w/2),Math.max(0,Math.abs(localY)-body.plugin.piece.h/2));
       if (edgeDistance > radius) continue;
       const falloff = 1 - edgeDistance / radius;
       Sleeping.set(body, false);
-      this._damage(body, strength * Math.pow(falloff, 0.8), cracker);
+      const resistance = getDamageMultiplier(body.plugin.piece.material,cracker,options.boosted);
+      this._damage(body, strength * energy * Math.pow(falloff, 1.1) * resistance, cracker);
       const directionX = distance > 1 ? dx / distance : 0.2;
       const directionY = distance > 1 ? dy / distance : -1;
-      const materialMass = Math.max(0.85, Math.sqrt(body.mass / 5));
-      const force = (3 + 13 * falloff) * impulseScale / materialMass;
+      const materialMass = Math.max(0.8, Math.sqrt(body.mass / 6));
+      const baseImpulse = {rocket:5,sutli:11,chakri:3,ladi:3.5}[cracker] || 5;
+      const force = baseImpulse * falloff * falloff * energy * impulseScale * Math.sqrt(resistance) / materialMass;
       Body.setVelocity(body, {
         x: body.velocity.x + directionX * force,
-        y: body.velocity.y + (directionY - 0.24) * force,
+        y: body.velocity.y + (directionY - 0.14) * force,
       });
-      Body.setAngularVelocity(body, body.angularVelocity + directionX * falloff * 0.09 * impulseScale);
+      Body.setAngularVelocity(body, body.angularVelocity + directionX * falloff * 0.045 * energy * impulseScale / materialMass);
     }
   }
 
@@ -378,6 +418,14 @@ export class GamePhysics {
     p.collapsed = reason === 'collapse';
     p.destroyedAt = this.time;
     Sleeping.set(body, false);
+    // Breaking a load-bearing piece changes its collision geometry. The broken
+    // half remains real rubble; a zero-health full-height post cannot secretly
+    // continue holding a roof up.
+    const sx = p.piece.kind === 'support' || p.piece.kind === 'brace' ? 0.72 : 0.82;
+    const sy = p.piece.kind === 'support' || p.piece.kind === 'brace' ? 0.48 : 0.68;
+    Body.scale(body,sx,sy);
+    body.collisionFilter.category = 0x0004;
+    p.piece = {...p.piece,w:p.piece.w*sx,h:p.piece.h*sy,sourceKind:p.piece.kind,kind:'rubble'};
     // Rubble remains a normal body, allowing it to transfer momentum to the
     // neighboring structure. Its ghost health can never award points twice.
     this.score += p.points;

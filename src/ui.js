@@ -1,25 +1,33 @@
 import { LEVELS, CRACKERS } from './levels.js';
 import { drawCracker, crackerAtlasReady } from './art.js';
+import * as Physics from './physics.js';
 
 const TYPES = ['rocket', 'sutli', 'chakri', 'ladi'];
+const MATERIAL_FALLBACK = {
+  wood: { displayname: 'Wood', health: 60, resistance: { rocket: 1, boostedRocket: 1.25, sutli: .95, chakri: 1.7, ladi: 1.55 } },
+  brick: { displayname: 'Brick', health: 115, resistance: { rocket: .75, boostedRocket: 1.1, sutli: 1.45, chakri: .6, ladi: .85 } },
+  concrete: { displayname: 'Concrete', health: 210, resistance: { rocket: .28, boostedRocket: 1.3, sutli: .9, chakri: .15, ladi: .25 } },
+  metal: { displayname: 'Steel', health: 240, resistance: { rocket: .25, boostedRocket: 1.8, sutli: .6, chakri: .12, ladi: .15 } },
+};
+const materials = () => Physics.MATERIALS || MATERIAL_FALLBACK;
 const formatScore = (value) => Math.round(value || 0).toLocaleString('en-IN');
 const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const ICONS = {
-  play: '<path d="m9 5 12 7-12 7Z"/>',
-  pause: '<path d="M8 5v14M16 5v14"/>',
-  restart: '<path d="M5 9a8 8 0 1 1-1 6M5 3v6h6"/>',
-  sound: '<path d="M4 9h4l5-4v14l-5-4H4ZM17 8c3 2 3 6 0 8M20 5c5 4 5 10 0 14"/>',
-  mute: '<path d="M4 9h4l5-4v14l-5-4H4ZM17 9l5 6M22 9l-5 6"/>',
-  music: '<path d="M9 17V5l12-2v12M9 8l12-2"/><ellipse cx="5.5" cy="18" rx="3.5" ry="3"/><ellipse cx="17.5" cy="16" rx="3.5" ry="3"/>',
-  musicOff: '<path d="M9 17V5l12-2v8M9 8l12-2M17 14l6 6M23 14l-6 6"/><ellipse cx="5.5" cy="18" rx="3.5" ry="3"/>',
-  help: '<circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 1 1 4 3c-1 0-1 1-1 2M12 17h.01"/>',
+  play: '<path d="M7 4h4v3h4v3h4v4h-4v3h-4v3H7Z"/>',
+  pause: '<path d="M7 5h3v14H7ZM15 5h3v14h-3Z"/>',
+  restart: '<path d="M6 4h12v3h3v11h-3v3H6v-3H3v-5M3 3v6h6"/>',
+  sound: '<path d="M3 8h4V6h2V4h3v16H9v-2H7v-2H3ZM16 8h2v8h-2M20 5h2v14h-2"/>',
+  mute: '<path d="M3 8h4V6h2V4h3v16H9v-2H7v-2H3ZM16 9h2v2h2v2h2v2M22 9h-2v2h-2v2h-2v2"/>',
+  music: '<path d="M9 18V4h12v12M9 8h12"/><rect x="3" y="16" width="6" height="4"/><rect x="15" y="14" width="6" height="4"/>',
+  musicOff: '<path d="M9 18V4h12v7M9 8h12M16 14h2v2h2v2h2v2M22 14h-2v2h-2v2h-2v2"/><rect x="3" y="16" width="6" height="4"/>',
+  help: '<rect x="3" y="3" width="18" height="18"/><path d="M8 8V6h8v5h-4v3M12 17h.01"/>',
   close: '<path d="m6 6 12 12M18 6 6 18"/>',
   arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
   back: '<path d="M20 12H4m6-6-6 6 6 6"/>',
-  lock: '<rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/>',
-  grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  lock: '<rect x="5" y="10" width="14" height="11"/><path d="M8 10V4h8v6M12 14v3"/>',
+  grid: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
 };
-const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ICONS.arrow}</svg>`;
+const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">${ICONS[name] || ICONS.arrow}</svg>`;
 const diya = (lit = true, index = 0) => `<span class="diya ${lit ? 'is-lit' : ''}" style="--i:${index}" aria-hidden="true"><span class="diya-flame"></span><span class="diya-bowl"></span></span>`;
 const mini = (type, cls = '') => `<canvas class="cracker-icon ${cls}" data-cracker="${type}" width="160" height="120" aria-hidden="true"></canvas>`;
 
@@ -52,6 +60,7 @@ export class GameUI {
           <button class="icon-button" data-action="pause" aria-label="Pause game" title="Pause">${icon('pause')}</button>
         </section>
         <div id="level-hint" class="level-hint" hidden><span>✦</span><span id="level-hint-text"></span></div>
+        <div id="cracker-matchup" class="cracker-matchup" aria-label="Selected firecracker material damage" hidden><span id="matchup-title">ROCKET / DAMAGE</span><span id="matchup-materials"></span><span id="matchup-tip">BOOST FOR TOUGH SUPPORTS</span></div>
         <section id="cracker-toolbar" class="cracker-toolbar" aria-label="Choose firecracker" hidden>
           <div class="ammo-count"><strong id="hud-remaining">3</strong><span>SHOTS<br>LEFT</span></div>
           <div class="cracker-tray">${TYPES.map((type, i) => `<button class="cracker-card" data-type="${type}" aria-label="Choose ${escapeHTML(CRACKERS[type]?.name || type)}">${mini(type)}<span class="cracker-card-copy"><span class="cracker-name">${escapeHTML(CRACKERS[type]?.name || type)}</span><span class="cracker-role">${['Precision', 'Big blast', 'Base breaker', 'Chain reaction'][i]}</span></span><span class="cracker-key">${i + 1}</span><span class="cracker-lock">${icon('lock')}</span></button>`).join('')}</div>
@@ -154,17 +163,30 @@ export class GameUI {
       button.classList.toggle('is-locked', !allowed);
       button.disabled = !allowed || !ready;
       button.setAttribute('aria-pressed', String(button.dataset.type === selected));
-      button.title = allowed ? CRACKERS[button.dataset.type]?.description || '' : `Unlocks in level ${CRACKERS[button.dataset.type]?.unlockLevel || 1}`;
+      button.title = allowed ? `${CRACKERS[button.dataset.type]?.description || ''} Damage: ${Object.entries(materials()).map(([key, material]) => `${material.displayname || material.displayName || material.name || MATERIAL_FALLBACK[key]?.displayname} ${Math.round((material.resistance?.[button.dataset.type] ?? MATERIAL_FALLBACK[key]?.resistance?.[button.dataset.type] ?? 1) * 100)}%`).join(' / ')}. Rocket boost increases concrete and steel damage.` : `Unlocks in level ${CRACKERS[button.dataset.type]?.unlockLevel || 1}`;
     });
     const projectileType = physics.projectile?.plugin?.type || selected;
+    const guideType = projectileType === 'rocket' && physics.projectile?.plugin?.activated ? 'boostedRocket' : selected;
+    if (this.matchupSignature !== guideType) {
+      this.matchupSignature = guideType;
+      set('matchup-title', `${guideType === 'boostedRocket' ? 'BOOSTED ROCKET' : CRACKERS[selected]?.name || selected} / DAMAGE`);
+      document.getElementById('matchup-materials').innerHTML = Object.entries(materials()).map(([key, material]) => {
+        const strength = material.resistance?.[guideType] ?? MATERIAL_FALLBACK[key]?.resistance?.[guideType] ?? 1;
+        return `<span class="matchup-material ${strength >= 1 ? 'strong-match' : strength < .5 ? 'weak-match' : ''}" title="${escapeHTML(material.displayname || material.displayName || material.name || MATERIAL_FALLBACK[key]?.displayname)}: ${material.health || material.hp || MATERIAL_FALLBACK[key]?.health} HP. ${Math.round(strength * 100)}% of base damage"><i class="${key}-swatch"></i>${escapeHTML(material.displayname || material.displayName || material.name || MATERIAL_FALLBACK[key]?.displayname)} <b>${Math.round(strength * 100)}%</b></span>`;
+      }).join('');
+      set('matchup-tip', ({rocket:'TAP BOOST FOR CONCRETE + STEEL',boostedRocket:'PRECISION BREAKER: AIM FOR ONE SUPPORT',sutli:'WIDE BLAST / GREAT AGAINST BRICK',chakri:'ROLL LOW / BEST AGAINST WOOD',ladi:'SEVEN POPS / BEST AGAINST WOOD'})[guideType]);
+    }
     const ability = document.getElementById('ability-button');
     const active = physics.status === 'flight';
+    const used = Boolean(physics.projectile?.plugin?.activated);
     ability.hidden = !active;
-    if (ability.dataset.crackerType !== projectileType) {
-      ability.dataset.crackerType = projectileType;
-      ability.innerHTML = `${({ rocket: 'BOOST ROCKET', sutli: 'BURST THE BOMB', chakri: 'SPIN UP', ladi: 'LIGHT THE LADI' })[projectileType]} ${icon('arrow')}`;
+    ability.disabled = used;
+    const abilityKey = `${projectileType}:${used}`;
+    if (ability.dataset.crackerType !== abilityKey) {
+      ability.dataset.crackerType = abilityKey;
+      ability.innerHTML = `${(used ? { rocket: 'BOOST USED', sutli: 'BOMB LIT', chakri: 'SPINNING', ladi: 'FUSE LIT' } : { rocket: 'BOOST ROCKET', sutli: 'BURST THE BOMB', chakri: 'SPIN UP', ladi: 'LIGHT THE LADI' })[projectileType]} ${used ? '✓' : icon('arrow')}`;
     }
-    set('shot-instruction', active ? 'TAP IN FLIGHT / SPACE' : physics.status === 'settling' ? 'WAIT FOR THE DUST TO SETTLE…' : ready ? 'DRAG. AIM. RELEASE.' : 'WHAT A DHAMAKA!');
+    set('shot-instruction', active ? used ? 'ABILITY ACTIVE / INCOMING!' : 'TAP IN FLIGHT / SPACE' : physics.status === 'settling' ? 'WAIT FOR THE DUST TO SETTLE…' : ready ? 'DRAG. AIM. RELEASE.' : 'WHAT A DHAMAKA!');
     this.updateToggles();
     if (this.screenName === 'levels' && this.levelSignature !== JSON.stringify([this.state.save.unlocked, this.state.save.best])) this.renderLevels();
   }
@@ -195,6 +217,7 @@ export class GameUI {
     document.getElementById('game-hud').hidden = !gameplay;
     document.getElementById('cracker-toolbar').hidden = !gameplay;
     document.getElementById('level-hint').hidden = name !== 'play';
+    document.getElementById('cracker-matchup').hidden = name !== 'play';
     this.layer.className = `screen-layer screen-${name}`;
     this.layer.hidden = name === 'play';
     this.layer.innerHTML = '';
@@ -219,7 +242,7 @@ export class GameUI {
         <div class="hero-controls"><span class="drag-symbol">↙</span><span>Drag back. Release. Enjoy the chaos.</span></div>
       </section>
       <div class="hero-scene-label"><span class="scene-pill">A FESTIVAL OF PHYSICS</span><span class="scene-scribble">Find the weak spot.<br><b>Make the big shot.</b><span>↗</span></span></div>
-      <footer class="start-footer"><span><i class="mini-diya"></i> HAPPY DIWALI, HIGH SCORES</span><div class="start-crackers">${TYPES.map(type => mini(type)).join('')}<span>MEET YOUR<br>FIREPOWER</span></div><span>8 LEVELS <i>•</i> 4 CRACKERS <i>•</i> ENDLESS DHAMAKA</span></footer>`;
+      <footer class="start-footer"><span><i class="footer-star">✦</i> HAPPY DIWALI, HIGH SCORES</span><div class="start-crackers">${TYPES.map(type => mini(type)).join('')}<span>MEET YOUR<br>FIREPOWER</span></div><span>8 LEVELS <i>•</i> 4 CRACKERS <i>•</i> ENDLESS DHAMAKA</span></footer>`;
   }
 
   renderLevels() {
@@ -259,7 +282,7 @@ export class GameUI {
   }
 
   renderHelp() {
-    this.layer.innerHTML = `<section class="help-card modal-card" role="dialog" aria-modal="true" aria-labelledby="help-heading"><button class="icon-button modal-close" data-action="close-help" aria-label="Close how to play">${icon('close')}</button><span class="eyebrow">A LITTLE AIM GOES A LONG WAY</span><h2 id="help-heading">Make some <span>beautiful chaos.</span></h2><div class="help-steps"><div><span class="help-step-symbol">↙</span><strong>01 / PULL BACK</strong><p>Drag backwards from the rooftop launcher. The dotted arc shows where your shot is going.</p></div><div><span class="help-step-symbol">↗</span><strong>02 / LET IT FLY</strong><p>Release to launch. Tap during flight or press Space to activate the special ability.</p></div><div><span class="help-step-symbol">✦</span><strong>03 / BRING IT DOWN</strong><p>Remove weak supports, trigger a collapse and destroy 90% to win. Use fewer shots for three diyas.</p></div></div><div class="help-materials"><span><i class="wood-swatch"></i>WOOD <small>Easy to break</small></span><span><i class="brick-swatch"></i>BRICK <small>Good with a blast</small></span><span><i class="concrete-swatch"></i>CONCRETE <small>Drop it from height</small></span></div><div class="help-crackers">${TYPES.map(type => `<div>${mini(type)}<strong>${escapeHTML(CRACKERS[type]?.name || type)}</strong><span>${escapeHTML(CRACKERS[type]?.description || '')}</span></div>`).join('')}</div><div class="help-footer"><span>MOUSE / TOUCH TO AIM <i>•</i> SPACE TO ACTIVATE <i>•</i> 1–4 TO SELECT</span><button class="button button-primary" data-action="close-help">GOT IT ${icon('arrow')}</button></div></section>`;
+    this.layer.innerHTML = `<section class="help-card modal-card" role="dialog" aria-modal="true" aria-labelledby="help-heading"><button class="icon-button modal-close" data-action="close-help" aria-label="Close how to play">${icon('close')}</button><span class="eyebrow">A LITTLE AIM GOES A LONG WAY</span><h2 id="help-heading">Make some <span>beautiful chaos.</span></h2><div class="help-steps"><div><span class="help-step-symbol">↙</span><strong>01 / PULL BACK</strong><p>Drag backwards from the rooftop launcher. The dotted arc shows where your shot is going.</p></div><div><span class="help-step-symbol">↗</span><strong>02 / LET IT FLY</strong><p>Release to launch. Tap during flight or press Space to activate the special ability.</p></div><div><span class="help-step-symbol">✦</span><strong>03 / BRING IT DOWN</strong><p>Remove weak supports, trigger a collapse and destroy 90% to win. Use fewer shots for three diyas.</p></div></div><div class="material-guide"><div class="material-guide-heading"><strong>MATERIAL MATCHUPS</strong><span>Base damage multiplier. Higher = stronger. Boost before impact.</span></div><div class="material-table-wrap"><table><thead><tr><th>MATERIAL / HP</th><th>ROCKET</th><th>BOOST</th><th>SUTLI</th><th>CHAKRI</th><th>LADI</th></tr></thead><tbody>${Object.entries(materials()).map(([key, material]) => `<tr><th><i class="${key}-swatch"></i>${escapeHTML(material.displayname || material.displayName || material.name || MATERIAL_FALLBACK[key]?.displayname)} <small>${material.health || material.hp || MATERIAL_FALLBACK[key]?.health} HP</small></th>${['rocket','boostedRocket','sutli','chakri','ladi'].map(type => {const n=material.resistance?.[type] ?? MATERIAL_FALLBACK[key]?.resistance?.[type] ?? 1;return `<td class="${n>=1?'strong-match':n<.5?'weak-match':''}">${n.toFixed(2).replace(/0$/, '')}×</td>`;}).join('')}</tr>`).join('')}</tbody></table></div></div><div class="help-crackers">${TYPES.map(type => `<div>${mini(type)}<strong>${escapeHTML(CRACKERS[type]?.name || type)}</strong><span>${escapeHTML(CRACKERS[type]?.description || '')}</span></div>`).join('')}</div><div class="help-footer"><span>MOUSE / TOUCH TO AIM <i>•</i> SPACE TO ACTIVATE <i>•</i> 1–4 TO SELECT</span><button class="button button-primary" data-action="close-help">GOT IT ${icon('arrow')}</button></div></section>`;
   }
 
   toast(message) {
@@ -272,3 +295,4 @@ export class GameUI {
     this.toastTimer = setTimeout(() => node.classList.remove('is-visible'), 2700);
   }
 }
+
