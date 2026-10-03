@@ -80,7 +80,7 @@ export class GameUI {
   handleClick(event) {
     const target = event.target.closest('button');
     if (!target || target.disabled) return;
-    if (target.dataset.type) { this.callbacks.select?.(target.dataset.type); return; }
+    if (target.matches('.cracker-card') && target.dataset.type) { this.callbacks.select?.(target.dataset.type); return; }
     if (target.dataset.level) { this.callbacks.level?.(Number(target.dataset.level)); return; }
     const action = target.dataset.action;
     if (!action) return;
@@ -126,7 +126,7 @@ export class GameUI {
       if (!ctx) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.imageSmoothingEnabled = false;
-      drawCracker(ctx, canvas.dataset.cracker, canvas.width / 2, canvas.height / 2, 87, 0);
+      drawCracker(ctx, canvas.dataset.cracker, canvas.width / 2, canvas.height / 2, 110, 0);
     });
   }
 
@@ -160,8 +160,8 @@ export class GameUI {
     const ability = document.getElementById('ability-button');
     const active = physics.status === 'flight';
     ability.hidden = !active;
-    if (ability.dataset.type !== projectileType) {
-      ability.dataset.type = projectileType;
+    if (ability.dataset.crackerType !== projectileType) {
+      ability.dataset.crackerType = projectileType;
       ability.innerHTML = `${({ rocket: 'BOOST ROCKET', sutli: 'BURST THE BOMB', chakri: 'SPIN UP', ladi: 'LIGHT THE LADI' })[projectileType]} ${icon('arrow')}`;
     }
     set('shot-instruction', active ? 'TAP IN FLIGHT / SPACE' : physics.status === 'settling' ? 'WAIT FOR THE DUST TO SETTLE…' : ready ? 'DRAG. AIM. RELEASE.' : 'WHAT A DHAMAKA!');
@@ -184,6 +184,10 @@ export class GameUI {
 
   showScreen(name, data = {}) {
     if (data.save) this.state.save = data.save;
+    if (name !== 'play') {
+      clearTimeout(this.toastTimer);
+      document.getElementById('toast')?.classList.remove('is-visible');
+    }
     this.screenName = name;
     this.screenData = data;
     this.root.dataset.screen = name;

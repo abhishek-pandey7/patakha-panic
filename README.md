@@ -22,6 +22,8 @@ pnpm build
 pnpm preview
 ```
 
+For the desktop browser smoke check, leave `pnpm dev` running and use `pnpm test:e2e` in a second terminal. Windows uses the installed Chrome browser. On other systems run `pnpm exec playwright install chromium` first, or set `CHROME_PATH` to your browser executable. `GAME_URL` overrides the default local URL; screenshots are saved in ignored `test-results/`.
+
 The `dist/` folder is a complete static game. Serve it over HTTP or upload it to a static hosting provider. Relative asset paths support subdirectory hosting. The production bundle includes the supplied video and cracker illustration; it does not fetch a physics engine or audio from a CDN.
 
 ## Controls
