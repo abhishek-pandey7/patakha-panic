@@ -2,6 +2,22 @@ import Matter from 'matter-js';
 import { WORLD } from './config.js';
 
 const { Engine, Bodies, Body, Composite, Events, Sleeping } = Matter;
+const pointEdgeDistanceSquared=(p,a,b)=>{
+  const dx=b.x-a.x,dy=b.y-a.y;
+  const t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy||1)));
+  return (p.x-a.x-t*dx)**2+(p.y-a.y-t*dy)**2;
+};
+const touching=(a,b)=>{
+  if(a.isSensor||b.isSensor||!(a.collisionFilter.mask&b.collisionFilter.category)||!(b.collisionFilter.mask&a.collisionFilter.category))return false;
+  const tolerance=1.5;
+  if(a.bounds.max.x+tolerance<b.bounds.min.x||b.bounds.max.x+tolerance<a.bounds.min.x||a.bounds.max.y+tolerance<b.bounds.min.y||b.bounds.max.y+tolerance<a.bounds.min.y)return false;
+  if(Matter.Collision.collides(a,b))return true;
+  // Resting contacts can have a tiny solver separation. Polygon edge proximity
+  // preserves those contacts without joining empty corners of rotated AABBs.
+  for(const [source,target]of[[a,b],[b,a]])for(const vertex of source.vertices)for(let i=0;i<target.vertices.length;i++)
+    if(pointEdgeDistanceSquared(vertex,target.vertices[i],target.vertices[(i+1)%target.vertices.length])<=tolerance*tolerance)return true;
+  return false;
+};
 
 export const LAUNCHER = WORLD.launcher;
 export const GROUND_Y = WORLD.ground;
@@ -78,6 +94,8 @@ export class GamePhysics {
     this.streak = 0;
     this.destroyedGroups = new Set();
     this.scheduledPops = [];
+    this.supportCheckAt = 0;
+    this.needsSupportCheck = false;
     this.initializing = true;
     const ground = Bodies.rectangle(WORLD.width/2, GROUND_Y + 35, WORLD.width + 700, 70, {
       isStatic: true, friction: 0.85, label: 'ground',
@@ -130,6 +148,7 @@ export class GamePhysics {
     }
     this.totalWeight = this.bodies.reduce((sum, body) => sum + body.plugin.weight, 0);
     this.initializing = false;
+    this.getUnsupportedBodies();
     return this.getState();
   }
 
@@ -166,6 +185,7 @@ export class GamePhysics {
     this.streak = 0;
     this.combo = 0;
     this.lastComboGroups = 0;
+    for(const body of this.bodies)Sleeping.set(body,false);
     this._emit({ type: 'launch', cracker: type, x: LAUNCHER.x, y: LAUNCHER.y });
     return true;
   }
@@ -196,7 +216,8 @@ export class GamePhysics {
   }
 
   update(dtMs) {
-    if (!this.level || this.status === 'ready' || this.status === 'won' || this.status === 'lost') return;
+    if (!this.level || (this.status === 'ready'&&!this.needsSupportCheck) || this.status === 'won' || this.status === 'lost') return;
+    if(this.status==='ready'&&this.needsSupportCheck)this.status='settling';
     this.accumulator += Math.min(100, Math.max(0, dtMs || 0));
     let safety = 0;
     while (this.accumulator >= FIXED_STEP && safety++ < 7) {
@@ -241,6 +262,11 @@ export class GamePhysics {
       }
     }
     this._updateProgress();
+    if(this.needsSupportCheck||this.time>=this.supportCheckAt){
+      this.supportCheckAt=this.time+100;
+      this.needsSupportCheck=false;
+      for(const body of this.getUnsupportedBodies())Sleeping.set(body,false);
+    }
     if (this.projectile && this.shotTime > 5600) {
       const { x, y } = this.projectile.position;
       if (this.projectile.plugin.type === 'sutli') this._explode(x, y, 210, 270, 'sutli', {energy:this.projectile.plugin.energy});
@@ -418,6 +444,11 @@ export class GamePhysics {
     p.collapsed = reason === 'collapse';
     p.destroyedAt = this.time;
     Sleeping.set(body, false);
+    // Sleeping bodies do not receive gravity. Wake the complete physical scene
+    // before a fractured support's contact disappears, including neighboring
+    // groups joined by a balcony or bridge.
+    for(const neighbor of this.bodies)Sleeping.set(neighbor,false);
+    this.needsSupportCheck=true;
     // Breaking a load-bearing piece changes its collision geometry. The broken
     // half remains real rubble; a zero-health full-height post cannot secretly
     // continue holding a roof up.
@@ -462,6 +493,13 @@ export class GamePhysics {
   _finishShot() {
     if (this.status === 'won' || this.status === 'lost' || this.status === 'ready') return;
     this._updateProgress();
+    const unsupported=this.getUnsupportedBodies();
+    if(unsupported.length){
+      for(const body of unsupported)Sleeping.set(body,false);
+      this.status='settling';
+      this.calmTime=0;
+      return false;
+    }
     for (const body of this.bodies) {
       Body.setVelocity(body, { x: 0, y: 0 });
       Body.setAngularVelocity(body, 0);
@@ -475,6 +513,26 @@ export class GamePhysics {
       this.status = 'lost';
       this._emit({ type: 'lose', score: this.score, progress: this.progress, remaining: 0 });
     } else this.status = 'ready';
+    this.needsSupportCheck=false;
+    return true;
+  }
+
+  /** Real contacts to terrain/obstacles, independent of Matter's sleep-pair
+   * cache. An unsupported disconnected island must remain awake under gravity.
+   */
+  getUnsupportedBodies() {
+    const bodies=Composite.allBodies(this.engine.world).filter(b=>b!==this.projectile);
+    const neighbors=new Map(bodies.map(b=>[b,[]]));
+    for(let i=0;i<bodies.length;i++)for(let j=i+1;j<bodies.length;j++)if(touching(bodies[i],bodies[j])){
+      neighbors.get(bodies[i]).push(bodies[j]);neighbors.get(bodies[j]).push(bodies[i]);
+    }
+    const rooted=new Set(bodies.filter(b=>b.isStatic));const queue=[...rooted];
+    for(let i=0;i<queue.length;i++)for(const b of neighbors.get(queue[i]))if(!rooted.has(b)){rooted.add(b);queue.push(b);}
+    const present=new Set(bodies);
+    return this.bodies.filter(b=>{
+      b.plugin.supported=rooted.has(b);
+      return present.has(b)&&!rooted.has(b)&&b.position.x>-150&&b.position.x<WORLD.width+150&&b.position.y<WORLD.height+150;
+    });
   }
 
   _emit(event) {

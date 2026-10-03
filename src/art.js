@@ -126,10 +126,15 @@ export class SceneRenderer {
     if (event.type === 'damage') for (let i = 0; i < 6; i++) this.effects.push({ x, y, vx: rand(-4, 4), vy: rand(-6, 0), size: rand(3, 9), age: 0, life: rand(450, 900), color: event.color || '#e6b187', rubble: true });
     if (event.type === 'ability') {
       for (let i = 0; i < 25; i++) this.effects.push({ x, y, vx: rand(-7, 0), vy: rand(-3, 3), size: rand(3, 7), age: 0, life: 500, color: COLORS[i % 3], spark: true });
-      this.popups.push({ text: event.message || 'BOOST!', x, y: y - 60, age: 0, life: 1150, color: GOLD });
+      this.popups = this.popups.filter(e => e.kind !== 'ability');
+      this.popups.push({ kind: 'ability', text: event.message || 'BOOST!', x, y: y - 60, age: 0, life: 1150, color: GOLD });
     }
-    if (event.type === 'combo') this.popups.push({ text: event.message || 'DHAMAKA X' + (event.combo || 3) + '!', x, y: y - 45, age: 0, life: 1700, color: GOLD });
-    if (event.type === 'win') this.popups.push({ text: 'FULL PAISA VASOOL!', x: W * .78, y: GROUND - 430, age: 0, life: 2500, color: GOLD });
+    if (event.type === 'combo') {
+      this.popups = this.popups.filter(e => e.kind !== 'combo');
+      this.popups.push({ kind: 'combo', text: event.message || 'DHAMAKA X' + (event.combo || 3) + '!', x, y: y - 70, age: 0, life: 1700, color: GOLD });
+    }
+    if (event.type === 'win') this.popups = [{ kind: 'win', text: 'FULL PAISA VASOOL!', x: W * .78, y: GROUND - 430, age: 0, life: 2500, color: GOLD }];
+    if (this.popups.length > 2) this.popups = this.popups.slice(-2);
     if (this.effects.length > 850) this.effects.splice(0, this.effects.length - 850);
   }
 
@@ -294,6 +299,17 @@ export class SceneRenderer {
 
   drawObstacle(ctx, piece, w, h) {
     const x = -w / 2, y = -h / 2, kind = piece.kind;
+    if ((kind === 'canopy' || kind === 'sign') && w >= 72 && h <= 42) {
+      // Decorative suspension explains the fixed overhead obstacle; cables have no collider.
+      ctx.save(); ctx.globalAlpha *= .56;
+      const cableTop = -Math.max(0, piece.y || 0);
+      for (const cableX of [x + 21, x + w - 24]) {
+        fill(ctx, '#7890a6', cableX, cableTop, 3, y - cableTop + 3);
+        for (let yy = cableTop + 12; yy < y - 6; yy += 27) fill(ctx, '#a3b4c2', cableX, yy, 3, 6);
+        fill(ctx, '#b4c9d5', cableX - 3, y - 6, 9, 6);
+      }
+      ctx.restore();
+    }
     if (kind === 'barricade' || kind === 'sign') {
       fill(ctx, '#302d40', x, y, w, h); fill(ctx, '#ecab4e', x + 3, y + 3, w - 6, h - 6);
       ctx.save(); ctx.beginPath(); ctx.rect(x + 3, y + 3, w - 6, h - 6); ctx.clip();
@@ -435,7 +451,7 @@ export class SceneRenderer {
     });
     this.popups = this.popups.filter(e => e.age < e.life);
     this.popups.forEach(e => {
-      e.age += dt; const t = e.age / e.life, text = String(e.text).toUpperCase(), unit = text.length > 16 ? 3 : 6;
+      e.age += dt; const t = e.age / e.life, text = String(e.text).toUpperCase(), unit = text.length > 9 ? 3 : 6;
       const width = text.length * unit * 6, center = Math.max(width / 2 + 21, Math.min(W - width / 2 - 21, e.x)), top = e.y - t * 51;
       ctx.save(); ctx.globalAlpha = Math.min(1, (1 - t) * 4);
       fill(ctx, INK, center - width / 2 - 9, top - 9, width + 18, unit * 7 + 18);

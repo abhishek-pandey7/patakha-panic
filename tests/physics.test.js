@@ -13,6 +13,7 @@ function playShot(game,action) {
     game.update(FIXED_STEP);
   }
   assert.ok(!['flight','settling'].includes(game.status),'every shot has a bounded settling phase');
+  assert.equal(game.getUnsupportedBodies().length,0,'a finished shot cannot leave unsupported sleeping islands');
 }
 const fixture=material=>({shots:4,unlockedTypes:['rocket','sutli','chakri','ladi'],pieces:[{x:1410,y:730,w:100,h:100,kind:'wall',material,group:0}]});
 
@@ -29,7 +30,7 @@ test('authored structures begin upright, untouched and far from the launcher',()
   assert.equal(LEVELS.length,8);
   for(const level of LEVELS) {
     const g=new GamePhysics(level);
-    for(const b of g.bodies){const p=b.plugin;assert.equal(p.health,p.maxHealth);assert.ok(Math.hypot(b.position.x-p.piece.x,b.position.y-p.piece.y)<25);assert.ok(Math.abs(b.angle)<0.12);assert.ok(p.piece.x-p.piece.w/2>=1250);}
+    for(const b of g.bodies){const p=b.plugin;assert.equal(p.health,p.maxHealth);assert.ok(Math.hypot(b.position.x-p.piece.x,b.position.y-p.piece.y)<25);assert.ok(Math.abs(b.angle)<0.12);assert.ok(p.piece.x-p.piece.w/2>=1250);assert.ok(p.piece.x+p.piece.w/2<=1850);}
     for(let f=0;f<1200;f++)g.update(FIXED_STEP);
     assert.equal(g.progress,0);assert.equal(g.score,0);g.destroy();
   }
@@ -83,15 +84,43 @@ test('misses consume ammunition, end in a retry, and inventory cannot be overspe
   playShot(g,{type:'rocket',vx:5,vy:-10});assert.equal(g.status,'lost');assert.equal(g.progress,0);assert.equal(g.getState().remaining,0);assert.equal(g.launch('rocket',{x:32,y:0}),false);g.destroy();
 });
 
-test('early support puzzle requires real shots rather than idle damage',()=>{
-  const g=new GamePhysics(LEVELS[0]);playShot(g,{type:'rocket',vx:32,vy:-3,activateX:1120});assert.equal(g.status,'ready');assert.ok(g.progress>50&&g.progress<90);playShot(g,{type:'rocket',vx:28,vy:2,activateX:1120});assert.equal(g.status,'won');assert.ok(g.progress>=90);g.destroy();
+test('a precise strong support shot produces a natural collapse and clear',()=>{
+  const g=new GamePhysics(LEVELS[0]);playShot(g,{type:'rocket',vx:32,vy:-3,activateX:1120});assert.equal(g.status,'won');assert.ok(g.progress>=90);assert.equal(g.getUnsupportedBodies().length,0);g.destroy();
+});
+
+test('fracturing sleeping load-bearing posts wakes the supported roof under gravity',()=>{
+  const g=new GamePhysics(LEVELS[0]);const roof=g.bodies.find(b=>b.plugin.piece.kind==='roof');const originalY=roof.position.y;
+  assert.equal(roof.isSleeping,true);g.launch('rocket',{x:5,y:-10});
+  for(const b of g.bodies.filter(b=>b.plugin.piece.kind==='support'))g._damage(b,b.plugin.health,'support-fracture');
+  assert.equal(roof.isSleeping,false);
+  for(let i=0;i<850&&['flight','settling'].includes(g.status);i++)g.update(FIXED_STEP);
+  assert.ok(roof.position.y>originalY+40,'the intact roof must physically fall after its supports break');
+  assert.equal(g.getUnsupportedBodies().length,0);g.destroy();
+});
+
+test('reported level-eight rocket shot cannot leave a sleeping roof and tank hanging in the air',()=>{
+  const g=new GamePhysics(LEVELS[7]);const top=g.bodies.filter(b=>b.plugin.piece.group===2&&['roof','tank'].includes(b.plugin.piece.kind));const original=top.map(b=>b.position.y);
+  playShot(g,{type:'rocket',vx:32,vy:-3,activateX:1120});
+  assert.equal(g.getUnsupportedBodies().length,0);
+  top.forEach((b,i)=>assert.ok(b.position.y>original[i]+25,'unsupported upper pieces must physically fall, retaining true contacts'));
+  assert.ok(g.bodies.every(b=>!b.isSleeping||b.plugin.supported));
+  for(let i=0;i<180;i++)g.update(FIXED_STEP);
+  assert.equal(g.getUnsupportedBodies().length,0);g.destroy();
 });
 
 test('checked-in level solutions clear each authored puzzle within its ammunition budget',()=>{
+  assert.deepEqual(Object.keys(LEVEL_SOLUTIONS).map(Number).sort((a,b)=>a-b),[1,2,3,4,5,6,7,8]);
   for(const [id,actions] of Object.entries(LEVEL_SOLUTIONS)){
     const level=LEVELS.find(l=>l.id===Number(id));const g=new GamePhysics(level);
     assert.ok(actions.length<=level.shots);
-    for(const action of actions){if(g.status==='won')break;playShot(g,action);}
+    for(const action of actions){assert.ok(Math.hypot(action.vx,action.vy)<=WORLD.maxSpeed+1e-9);assert.ok(level.unlockedTypes.includes(action.type));if(g.status==='won')break;playShot(g,action);}
     assert.equal(g.status,'won',`level ${id} has a reproducible legal solution`);assert.ok(g.progress>=90);g.destroy();
+  }
+});
+
+test('late structures withstand common single-shot brute force attempts',()=>{
+  for(const level of LEVELS.slice(4))for(const type of level.unlockedTypes)for(const vy of[-6,-3,0,2]) {
+    const g=new GamePhysics(level);playShot(g,{type,vx:32,vy,...(type==='rocket'?{activateX:1120}:{})});
+    assert.notEqual(g.status,'won',`level ${level.id} ${type} brute shot must require another choice`);g.destroy();
   }
 });

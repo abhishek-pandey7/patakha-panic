@@ -48,10 +48,10 @@ export const LEVELS=[
     [...building({x:1390,width:210,floors:2,group:1,supports:['wood','wood','wood'],weak:[0]}),
      ...building({x:1720,width:160,floors:2,group:2,base:88,weak:[0,1]})],
     [obstacle(990,360,230,36,'sign','metal')]),
-  level(3,'Tank You Very Much','Terrace Trouble','Lob over the arch. Burst a Sutli beside the brick terrace; boost a Rocket into the reinforced pier.',5,3,RS,
+  level(3,'Tank You Very Much','Terrace Trouble','Thread the arch opening. Burst a Sutli beside the brick terrace; boost a Rocket into the reinforced pier.',5,4,RS,
     building({x:1500,width:250,floors:4,group:3,supports:['wood','concrete','wood'],weak:[0,2],heavy:1,tank:true}),
     [obstacle(985,540,44,70,'arch'),obstacle(985,740,44,80,'arch'),obstacle(1095,494,264,24,'arch')]),
-  level(4,'Balcony Dominoes','Terrace Trouble','Clear the steps. The stepped terrace and the heavy little tower have separate load paths.',5,3,RS,
+  level(4,'Balcony Dominoes','Terrace Trouble','Clear the steps. The stepped terrace and the heavy little tower have separate load paths.',5,4,RS,
     [...building({x:1390,width:220,floors:4,group:0,supports:['wood','wood','wood'],weak:[0,2],tank:true,step:14}),
      ...building({x:1740,width:180,floors:3,group:1,supports:['concrete','wood'],weak:[1],heavy:1})],
     [obstacle(935,751,64,58,'stair'),obstacle(997,714,64,132,'stair'),obstacle(1059,655,64,250,'stair')]),
@@ -77,6 +77,19 @@ export const LEVELS=[
     [obstacle(990,425,270,28,'canopy','metal'),obstacle(1165,680,42,200,'wall'),obstacle(855,754,112,52,'stair')]),
 ];
 
-// Legal hand-authored simulation solutions are filled during balance QA.
-// They are test data, never invoked by the player interface.
-export const LEVEL_SOLUTIONS = {};
+// Balance fixtures only: player controls never invoke these solutions. Vectors
+// are normalized to the same maximum pull as the real launcher.
+const shot=(type,vx,vy,activateX)=>{
+  const scale=Math.min(1,WORLD.maxSpeed/Math.hypot(vx,vy));
+  return {type,vx:vx*scale,vy:vy*scale,...(activateX?{activateX}:{})};
+};
+export const LEVEL_SOLUTIONS = {
+  1:[shot('rocket',32,-3,1120)],
+  2:[shot('rocket',32,-3,1120),shot('rocket',32,-2,1120)],
+  3:[shot('sutli',32,0),shot('rocket',32,2,1120)],
+  4:[shot('sutli',32,-6),shot('rocket',28,-6,1120),shot('sutli',28,-6),shot('sutli',32,-6)],
+  5:[shot('chakri',32,0),shot('chakri',28,-2)],
+  6:[shot('chakri',24,-6),shot('sutli',32,-6,1520),shot('ladi',24,-6),shot('rocket',24,-6,1120)],
+  7:[shot('chakri',32,0),shot('rocket',28,-2,1120),shot('rocket',32,-6,1640),shot('rocket',32,-3,1300)],
+  8:[shot('sutli',30.708305065568176,-9),shot('sutli',31.85906464414798,-3),shot('rocket',31.606961258558215,-5,1440),shot('sutli',31.606961258558215,-5,1480),shot('rocket',31.85906464414798,-3,1200)],
+};

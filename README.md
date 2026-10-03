@@ -43,6 +43,8 @@ Shots are limited per level. The next shot becomes available after impact and a 
 
 Blast damage, radius and impulse scale with shot power. Weak throws cannot produce a full-strength explosion or an automatic skyline collapse. Small shifts and rocking do not count as destroyed structure; substantial falling rubble and hard impacts still create chain reactions.
 
+Breaking a support wakes the connected structure. Unsupported floors and tanks continue falling under gravity before the next shot; settled rubble remains physical and can damage neighbouring targets.
+
 | Material | Effective choice | What it resists |
 | --- | --- | --- |
 | Wood | Chakri and Ladi; precise Rocket support shots | Requires enough power to reach and break the support |
@@ -50,7 +52,7 @@ Blast damage, radius and impulse scale with shot power. Weak throws cannot produ
 | Concrete | Boosted Rocket into an exposed pier; concentrated Sutli blast | Chakri, Ladi and ordinary Rockets |
 | Steel | Boosted Rocket | Chakri and Ladi; Sutli damage is reduced |
 
-The tray shows the selected cracker's damage multiplier for each material. Rocket values explain its boosted piercing ability. The help screen includes the full material guide. Building textures and resistance badges make the target composition visible before launching.
+The readout beneath the level hint shows the selected cracker's damage multiplier for each material; tray buttons also provide matchup tooltips. Rocket values switch after its piercing boost is activated. The help screen includes the full material guide. Building textures and resistance badges make the target composition visible before launching.
 
 ## Eight skylines
 
@@ -61,7 +63,7 @@ The tray shows the selected cracker's damage multiplier for each material. Rocke
 | Bazaar Blast | Shop, Drop & Roll; Chain Reaction | Ramp, staggered walls, wood and brick shopfronts, steel-backed targets |
 | Skyline Showdown | Bridge over Boom; The Grand Dhamaka | Steel canopies, independent reinforced towers and mixed-material load paths |
 
-At 90% destruction you earn a diya and unlock the next level. Two diyas reward higher destruction or efficiency. Three require at least 97% destruction and a shot count within the level's par, or at least two unused crackers. A three-diya finish fills the sky with a firework celebration. Score, best diyas, unlocked levels and separate music/sound preferences persist in local storage. The game remains playable when browser storage is unavailable.
+At 90% destruction you earn a diya and unlock the next level. Two diyas reward higher destruction or efficiency. Three require at least 97% destruction plus either a shot count within the level's par or at least two unused crackers. A three-diya finish fills the sky with a firework celebration. Score, best diyas, unlocked levels and separate music/sound preferences persist in local storage. The game remains playable when browser storage is unavailable.
 
 ## Assets and audio
 
