@@ -2,7 +2,7 @@
 
 **Aim. Ignite. Bring the house down.**
 
-A playable Diwali physics puzzle game with a pixel art foreground and the supplied animated Diwali city video. Launch four different firecrackers across a long obstacle course into eight empty skylines, choose the right material matchup, discover their load-bearing supports, and clear at least 90% of each structure. Made with vanilla JavaScript, Canvas 2D, Vite, and Matter.js 0.20.0.
+A playable Diwali physics puzzle game with a pixel art foreground and the supplied animated Diwali city video. Launch four different firecrackers across a long obstacle course into twelve empty skylines, choose the right material matchup, discover their load-bearing supports, and clear at least 90% of each structure. Made with vanilla JavaScript, Canvas 2D, Vite, and Matter.js 0.20.0.
 
 ## Run
 
@@ -57,7 +57,7 @@ Breaking a support wakes the connected structure. Unsupported floors and tanks c
 
 The readout beneath the level hint shows the selected cracker's damage multiplier for each material; tray buttons also provide matchup tooltips. Rocket values switch after its piercing boost is activated. The help screen includes the full material guide. Building textures and resistance badges make the target composition visible before launching.
 
-## Eight skylines
+## Twelve skylines
 
 | Location | Levels | New challenge |
 | --- | --- | --- |
@@ -65,6 +65,10 @@ The readout beneath the level hint shows the selected cracker's damage multiplie
 | Terrace Trouble | Tank You Very Much; Balcony Dominoes | Arch, stepped wall, terraced buildings, reinforced piers and rooftop tanks |
 | Bazaar Blast | Shop, Drop & Roll; Chain Reaction | Ramp, staggered walls, wood and brick shopfronts, steel-backed targets |
 | Skyline Showdown | Bridge over Boom; The Grand Dhamaka | Steel canopies, independent reinforced towers and mixed-material load paths |
+| Midnight Mela | Steel Mandap; Lantern Lane | A tall lob wall, a steel-legged hall, packed shops under a low sign and tighter shot budgets |
+| Grand Finale | Twin Temple Towers; Thousand Diya Night | Five-storey reinforced towers with no weak legs, ground blockers and almost no spare shots |
+
+Each tower that is completely destroyed fades out of the scene once the dust settles, so its rubble no longer blocks later shots. The Chakri drives through timber but stalls and spins in place against brick, concrete and steel.
 
 At 90% destruction you earn a diya and unlock the next level. Two diyas reward higher destruction or efficiency. Three require at least 97% destruction plus either a shot count within the level's par or at least two unused crackers. A three-diya finish fills the sky with a firework celebration. Score, best diyas, unlocked levels and separate music/sound preferences persist in local storage. The game remains playable when browser storage is unavailable.
 

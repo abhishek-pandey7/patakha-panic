@@ -50,7 +50,7 @@ function setAudio(name, enabled) {
 }
 
 const ui = new GameUI({
-  start: () => startLevel(Math.min(save.unlocked,8)),
+  start: () => startLevel(Math.min(save.unlocked,LEVELS.length)),
   level: id => { if (id <= save.unlocked) startLevel(id); },
   select: type => {
     if (mode === 'play' && physics.getState().status === 'ready' && level.unlockedTypes.includes(type)) {
@@ -60,7 +60,7 @@ const ui = new GameUI({
   pause: pause,
   resume: resume,
   restart: () => startLevel(level.id),
-  next: () => level.id < 8 ? startLevel(level.id + 1) : showLevels(),
+  next: () => level.id < LEVELS.length ? startLevel(level.id + 1) : showLevels(),
   menu: showLevels,
   music: enabled => setAudio('music',enabled),
   sound: enabled => setAudio('sound',enabled),

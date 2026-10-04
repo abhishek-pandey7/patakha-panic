@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {loadSave, writeSave, freshSave, awardDiyas, recordResult, normalizeUIScale} from '../src/progress.js';
+import {LEVELS} from '../src/levels.js';
 
 test('UI size upgrades older saves without changing progress or sound preferences',()=>{
   const legacy = {unlocked:5,best:{4:{score:900,diyas:2,progress:96}},seen:['rocket','sutli'],music:false,sound:true};
@@ -34,7 +35,7 @@ test('unavailable or corrupt storage falls back to a playable first level',()=>{
   assert.deepEqual(loadSave({getItem(){throw new Error('private mode');}}),freshSave());
   assert.deepEqual(loadSave({getItem:()=>'{bad'}),freshSave());
   assert.equal(writeSave(freshSave(),{setItem(){throw Error('quota');}}),false);
-  assert.equal(loadSave({getItem:()=>JSON.stringify({unlocked:999,seen:['rocket','invalid']})}).unlocked,8);
+  assert.equal(loadSave({getItem:()=>JSON.stringify({unlocked:999,seen:['rocket','invalid']})}).unlocked,LEVELS.length);
 });
 test('90% is mandatory and three diyas require efficient high destruction',()=>{
   const level={par:2};
@@ -52,5 +53,7 @@ test('only victories unlock levels and replay preserves individual personal best
   recordResult(save,{id:1},{won:true,score:1000,diyas:1,progress:92});
   assert.deepEqual(save.best[1],{score:2000,diyas:3,progress:100});
   recordResult(save,{id:8},{won:true,score:500,diyas:1,progress:92});
-  assert.equal(save.unlocked,8);
+  assert.equal(save.unlocked,9);
+  recordResult(save,{id:LEVELS.length},{won:true,score:500,diyas:1,progress:92});
+  assert.equal(save.unlocked,LEVELS.length,'the final level cannot unlock a missing one');
 });

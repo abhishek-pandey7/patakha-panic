@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import {WORLD} from '../src/config.js';
-import {LEVEL_SOLUTIONS} from '../src/levels.js';
+import {LEVELS,LEVEL_SOLUTIONS} from '../src/levels.js';
 
 const screenshots=path.resolve('test-results');
 fs.mkdirSync(screenshots,{recursive:true});
@@ -52,8 +52,8 @@ try {
   await page.getByRole('button',{name:'How to play',exact:true}).click();
   await page.getByRole('button',{name:'GOT IT'}).click();
   await page.getByRole('button',{name:'Choose a level',exact:true}).click();
-  assert.equal(await page.locator('.level-card').count(),8);
-  assert.equal(await page.locator('.level-card:disabled').count(),7);
+  assert.equal(await page.locator('.level-card').count(),LEVELS.length);
+  assert.equal(await page.locator('.level-card:disabled').count(),LEVELS.length-1);
   await page.locator('[data-level="1"]').click();
   await openSettings();
   await page.locator('[data-action="close-settings"]').first().click();
@@ -160,18 +160,15 @@ try {
   await page.locator('[data-action="next"]').click();
   assert.equal(await page.evaluate(()=>window.__patakha.getState().level),2);
 
-  // Reproduce the reported flattened skyline using legal Chakri launches.
-  // The intact chunks in its rubble pile must still earn full destruction.
-  await page.evaluate(()=>window.__patakha.startLevel(8));
+  // A legal Sutli launch flattens both reinforced towers of level 7. The
+  // intact chunks in its rubble pile must still earn full destruction.
+  await page.evaluate(()=>window.__patakha.startLevel(7));
   if(await page.locator('[data-action="close-unlock"]').count())await page.locator('[data-action="close-unlock"]').click();
-  await page.getByRole('button',{name:'Choose Chakri',exact:true}).click();
+  await page.getByRole('button',{name:'Choose Sutli Bomb',exact:true}).click();
   const collapse=await page.evaluate(()=>{
     const game=window.__patakha.physics;
-    const scale=32/Math.hypot(32,-6);
-    for(let shot=0;shot<3&&game.status!=='won';shot++) {
-      if(!game.launch('chakri',{x:32*scale,y:-6*scale}))throw new Error('collapsed skyline shot did not launch');
-      for(let i=0;i<650&&['flight','settling'].includes(game.status);i++)game.update(1000/60);
-    }
+    if(!game.launch('sutli',{x:26,y:-4}))throw new Error('collapsed skyline shot did not launch');
+    for(let i=0;i<650&&['flight','settling'].includes(game.status);i++)game.update(1000/60);
     return {progress:game.progress,status:game.status,remaining:game.getState().remaining,unsupported:game.getUnsupportedBodies().length};
   });
   assert.equal(collapse.status,'won');assert.equal(collapse.progress,100);assert.equal(collapse.unsupported,0);

@@ -15,6 +15,10 @@ const COMPACT_HINTS = [
   'Clear the walls. Light Ladi between the shops.',
   'Thread below the canopy. Boost into reinforced legs.',
   'Clear the canopies. Mix Sutli blasts with Rocket boosts.',
+  'Lob over the wall. Boost through the steel legs.',
+  'Stay under the sign. Drop the middle tower sideways.',
+  'Squeeze under the canopy. Boost into each steel pier.',
+  'All reinforced. Match every cracker to its material.',
 ];
 const MATERIAL_FALLBACK = {
   wood: { displayname: 'Wood', health: 60, resistance: { rocket: 1, boostedRocket: 1.25, sutli: .95, chakri: 1.7, ladi: 1.55 } },
@@ -72,7 +76,7 @@ export class GameUI {
           </div>
         </header>
         <section id="game-hud" class="game-hud" aria-label="Level status" hidden>
-          <div class="hud-location"><span id="hud-level-number" class="eyebrow">LEVEL 01 / 08</span><strong id="hud-level-name">Gully Warm-Up</strong></div>
+          <div class="hud-location"><span id="hud-level-number" class="eyebrow">LEVEL 01 / ${String(LEVELS.length).padStart(2, '0')}</span><strong id="hud-level-name">Gully Warm-Up</strong></div>
           <div class="hud-stat"><span class="eyebrow">SCORE</span><strong id="hud-score">0</strong></div>
           <div class="destruction-box"><div class="meter-label"><span>DESTRUCTION</span><strong id="hud-progress">0<span>%</span></strong></div><div class="destruction-track"><span id="destruction-fill"></span><i title="90% to win"></i></div></div>
           <button class="icon-button" data-action="restart" aria-label="Restart level" title="Restart">${icon('restart')}</button>
@@ -262,7 +266,7 @@ export class GameUI {
     const { level, physics = {}, selected = 'rocket' } = this.state;
     const compact = window.matchMedia('(max-height: 510px) and (orientation: landscape)').matches;
     const set = (id, text) => { const node = document.getElementById(id); if (node && node.textContent !== String(text)) node.textContent = text; };
-    set('hud-level-number', `LEVEL ${String(level?.id || 1).padStart(2, '0')} / 08`);
+    set('hud-level-number', `LEVEL ${String(level?.id || 1).padStart(2, '0')} / ${String(LEVELS.length).padStart(2, '0')}`);
     set('hud-level-name', level?.name || 'Gully Warm-Up');
     document.getElementById('hud-level-name').title = level?.name || 'Gully Warm-Up';
     const compactScore = compact || (this.appliedUISize >= 4 && innerWidth < 1700);
@@ -373,21 +377,21 @@ export class GameUI {
         <div class="eyebrow hero-eyebrow"><span class="live-dot"></span> THE DIWALI DESTRUCTION CLUB</div>
         <h1>PATAKHA<br><span>PANIC<span class="title-spark">✦</span></span></h1>
         <p class="hero-tagline">Aim. Ignite.<br>Bring the house down.</p>
-        <p class="hero-description">Four firecrackers. Eight skylines.<br>One very satisfying way to celebrate.</p>
+        <p class="hero-description">Four firecrackers. Twelve skylines.<br>One very satisfying way to celebrate.</p>
         <div class="hero-buttons"><button class="button button-primary" data-action="start">${saved ? 'LET’S KEEP GOING' : 'LET’S MAKE SOME NOISE'}${icon('arrow')}</button><button class="button button-outline" data-action="levels" aria-label="Choose a level">${icon('grid')}LEVELS</button></div>
         <div class="hero-controls"><span class="drag-symbol">↙</span><span>Drag back. Release. Enjoy the chaos.</span></div>
       </section>
       <div class="hero-scene-label"><span class="scene-pill">A FESTIVAL OF PHYSICS</span><span class="scene-scribble">Find the weak spot.<br><b>Make the big shot.</b><span>↗</span></span></div>
-      <footer class="start-footer"><span><i class="footer-star">✦</i> HAPPY DIWALI, HIGH SCORES</span><div class="start-crackers">${TYPES.map(type => mini(type)).join('')}<span>MEET YOUR<br>FIREPOWER</span></div><span>8 LEVELS <i>•</i> 4 CRACKERS <i>•</i> ENDLESS DHAMAKA</span></footer>`;
+      <footer class="start-footer"><span><i class="footer-star">✦</i> HAPPY DIWALI, HIGH SCORES</span><div class="start-crackers">${TYPES.map(type => mini(type)).join('')}<span>MEET YOUR<br>FIREPOWER</span></div><span>${LEVELS.length} LEVELS <i>•</i> 4 CRACKERS <i>•</i> ENDLESS DHAMAKA</span></footer>`;
   }
 
   renderLevels() {
     const { unlocked = 1, best = {} } = this.state.save;
     this.levelSignature = JSON.stringify([unlocked, best]);
-    this.layer.innerHTML = `<section class="level-select"><div class="section-heading"><div><span class="eyebrow">ONE CITY. EIGHT WAYS TO LIGHT IT UP.</span><h2>Pick your <span>playground.</span></h2></div><button class="icon-button" data-action="start-back" aria-label="Back to start">${icon('close')}</button></div><div class="level-grid">${LEVELS.map((level, i) => {
+    this.layer.innerHTML = `<section class="level-select"><div class="section-heading"><div><span class="eyebrow">ONE CITY. TWELVE WAYS TO LIGHT IT UP.</span><h2>Pick your <span>playground.</span></h2></div><button class="icon-button" data-action="start-back" aria-label="Back to start">${icon('close')}</button></div><div class="level-grid">${LEVELS.map((level, i) => {
       const locked = level.id > unlocked;
       const record = best[level.id];
-      return `<button class="level-card location-${Math.floor(i / 2)} ${locked ? 'is-locked' : ''}" data-level="${level.id}" ${locked ? 'disabled' : ''} aria-label="${escapeHTML(level.name)}, ${locked ? 'locked' : `${record?.diyas || 0} of 3 diyas`}"><div class="level-card-top"><span class="level-number">${String(level.id).padStart(2, '0')}</span><span class="level-unlock-icon">${icon(locked ? 'lock' : 'arrow')}</span></div><div class="level-city" aria-hidden="true"><i></i><i></i><i></i><i></i><span>✦</span></div><span class="level-location">${escapeHTML(level.location || ['Gully Warm-Up','Terrace Trouble','Bazaar Blast','Skyline Showdown'][Math.floor(i / 2)])}</span><strong>${escapeHTML(level.name)}</strong><div class="level-card-bottom"><span class="small-diyas">${[0, 1, 2].map(n => diya((record?.diyas || 0) > n, n)).join('')}</span><span>${locked ? 'COMPLETE PREVIOUS' : record ? formatScore(record.score) + ' BEST' : level.shots + ' SHOTS'}</span></div></button>`;
+      return `<button class="level-card location-${Math.floor(i / 2)} ${locked ? 'is-locked' : ''}" data-level="${level.id}" ${locked ? 'disabled' : ''} aria-label="${escapeHTML(level.name)}, ${locked ? 'locked' : `${record?.diyas || 0} of 3 diyas`}"><div class="level-card-top"><span class="level-number">${String(level.id).padStart(2, '0')}</span><span class="level-unlock-icon">${icon(locked ? 'lock' : 'arrow')}</span></div><div class="level-city" aria-hidden="true"><i></i><i></i><i></i><i></i><span>✦</span></div><span class="level-location">${escapeHTML(level.location || ['Gully Warm-Up','Terrace Trouble','Bazaar Blast','Skyline Showdown','Midnight Mela','Grand Finale'][Math.floor(i / 2)])}</span><strong>${escapeHTML(level.name)}</strong><div class="level-card-bottom"><span class="small-diyas">${[0, 1, 2].map(n => diya((record?.diyas || 0) > n, n)).join('')}</span><span>${locked ? 'COMPLETE PREVIOUS' : record ? formatScore(record.score) + ' BEST' : level.shots + ' SHOTS'}</span></div></button>`;
     }).join('')}</div><p class="level-select-note"><span>✦</span> Clear 90% of a skyline to unlock the next. Bring the house down with fewer shots for more diyas.</p></section>`;
     this.renderIcons();
   }
@@ -402,7 +406,7 @@ export class GameUI {
     const count = Math.max(0, Math.min(3, data.diyas || 0));
     const title = won ? (count === 3 ? 'Full paisa <span>vasool!</span>' : 'Kya shot <span>hai!</span>') : 'One more <span>spark?</span>';
     const next = level.id < LEVELS.length;
-    this.layer.innerHTML = `<section class="modal-card result-card ${won ? 'result-won' : 'result-lost'}" role="dialog" aria-modal="true" aria-labelledby="result-heading"><span class="eyebrow">${won ? 'SKYLINE CLEARED · ' : 'SO CLOSE · '}${escapeHTML(level.name).toUpperCase()}</span><h2 id="result-heading">${title}</h2><div class="result-diyas" aria-label="${count} out of 3 diyas">${[0, 1, 2].map(n => diya(n < count, n)).join('')}</div><p>${won ? (count === 3 ? 'A perfect little festival of falling bricks.' : 'That skyline had it coming. Can you do it in fewer shots?') : 'Find the weak point. Try a new angle. Let gravity help.'}</p><div class="result-stats"><div><span>DESTRUCTION</span><strong>${Math.round(data.progress || 0)}<small>%</small></strong></div><div><span>SCORE</span><strong>${formatScore(data.score)}</strong></div><div><span>SHOTS LEFT</span><strong>${data.remaining ?? 0}</strong></div></div><button class="button button-primary" data-action="${won && next ? 'next' : won ? 'menu' : 'restart'}">${won && next ? 'NEXT SKYLINE' : won ? 'ALL EIGHT. ALL LIT UP.' : 'TRY THAT SHOT AGAIN'}${icon(won ? 'arrow' : 'restart')}</button><div class="modal-secondary">${won ? `<button class="button button-outline" data-action="restart">${icon('restart')}GO FOR THREE DIYAS</button>` : ''}<button class="button button-outline" data-action="menu">${icon('grid')}LEVELS</button></div><span class="result-tip">${won ? 'LOCAL BESTS SAVED. BRAGGING RIGHTS EARNED.' : '90% DESTRUCTION TO CLEAR THE LEVEL'}</span></section>`;
+    this.layer.innerHTML = `<section class="modal-card result-card ${won ? 'result-won' : 'result-lost'}" role="dialog" aria-modal="true" aria-labelledby="result-heading"><span class="eyebrow">${won ? 'SKYLINE CLEARED · ' : 'SO CLOSE · '}${escapeHTML(level.name).toUpperCase()}</span><h2 id="result-heading">${title}</h2><div class="result-diyas" aria-label="${count} out of 3 diyas">${[0, 1, 2].map(n => diya(n < count, n)).join('')}</div><p>${won ? (count === 3 ? 'A perfect little festival of falling bricks.' : 'That skyline had it coming. Can you do it in fewer shots?') : 'Find the weak point. Try a new angle. Let gravity help.'}</p><div class="result-stats"><div><span>DESTRUCTION</span><strong>${Math.round(data.progress || 0)}<small>%</small></strong></div><div><span>SCORE</span><strong>${formatScore(data.score)}</strong></div><div><span>SHOTS LEFT</span><strong>${data.remaining ?? 0}</strong></div></div><button class="button button-primary" data-action="${won && next ? 'next' : won ? 'menu' : 'restart'}">${won && next ? 'NEXT SKYLINE' : won ? 'ALL TWELVE. ALL LIT UP.' : 'TRY THAT SHOT AGAIN'}${icon(won ? 'arrow' : 'restart')}</button><div class="modal-secondary">${won ? `<button class="button button-outline" data-action="restart">${icon('restart')}GO FOR THREE DIYAS</button>` : ''}<button class="button button-outline" data-action="menu">${icon('grid')}LEVELS</button></div><span class="result-tip">${won ? 'LOCAL BESTS SAVED. BRAGGING RIGHTS EARNED.' : '90% DESTRUCTION TO CLEAR THE LEVEL'}</span></section>`;
   }
 
   renderUnlock(data) {

@@ -2,7 +2,7 @@ import { LEVELS } from './levels.js';
 import { WORLD } from './config.js';
 
 const { width: W, height: H, ground: GROUND, launcher: LAUNCH, maxSpeed: MAX_SPEED } = WORLD;
-const PIXEL = 3, INK = '#152039', GOLD = '#ffcf66';
+const PIXEL = 3, INK = '#152039', GOLD = '#ffcf66', FADE_MS = 1200;
 const COLORS = ['#ffcf66', '#ff7698', '#6df1c7', '#ab91fb', '#78d9ff'];
 const MATERIAL_STYLE = {
   wood: { dark: '#654431', main: '#b97e49', light: '#edb77a', badge: '#ffc66c', strength: 1 },
@@ -96,6 +96,7 @@ export class SceneRenderer {
     this.effects = []; this.rings = []; this.popups = []; this.trail = []; this.fireworks = [];
     this.shake = 0; this.cameraX = 0; this.celebration = 0; this.nextCelebration = 0;
     this.viewport = { scale: 1, offsetX: 0, offsetY: 0, width: W, height: H }; this.resize();
+    this.fadeStarts = new WeakMap();
   }
 
   resize() {
@@ -105,6 +106,16 @@ export class SceneRenderer {
     const scale = Math.min(width / W, height / H);
     this.viewport = { scale, offsetX: (width - W * scale) / 2, offsetY: (height - H * scale) / 2, width, height };
     this.ctx.imageSmoothingEnabled = false;
+  }
+
+  /** Defeated towers sink slightly and fade away over FADE_MS. */
+  drawBody(ctx, body, time) {
+    if (!body.plugin?.defeated) { this.drawPiece(ctx, body); return; }
+    if (!this.fadeStarts.has(body)) this.fadeStarts.set(body, time);
+    const t = (time - this.fadeStarts.get(body)) / FADE_MS;
+    if (t >= 1) return;
+    ctx.save(); ctx.globalAlpha = 1 - t * t; ctx.translate(0, q(t * 18));
+    this.drawPiece(ctx, body); ctx.restore();
   }
 
   toWorld(clientX, clientY) {
@@ -168,7 +179,7 @@ export class SceneRenderer {
     const obstacles = showcase ? [] : phy.obstacles || [];
     if (obstacles.length) obstacles.forEach(body => this.drawPiece(ctx, body));
     else if (!showcase && state.level?.obstacles) state.level.obstacles.forEach(piece => this.drawPiece(ctx, { position: piece, angle: piece.angle || 0, plugin: { piece, obstacle: true } }));
-    if (bodies.length) bodies.forEach(body => this.drawPiece(ctx, body));
+    if (bodies.length) bodies.forEach(body => this.drawBody(ctx, body, state.time || 0));
     else if (state.level?.pieces) state.level.pieces.forEach(piece => this.drawPiece(ctx, { position: piece, angle: piece.angle || 0, plugin: { piece, health: 100, maxHealth: 100 } }));
     if (!showcase) this.drawLauncher(ctx, state.aim, state.selected || 'rocket', phy);
     if (state.aim) this.drawAim(ctx, state.aim);

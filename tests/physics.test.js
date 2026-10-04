@@ -27,7 +27,7 @@ test('trajectory preview exactly matches actual Matter.js flight over the longer
 });
 
 test('authored structures begin upright, untouched and far from the launcher',()=>{
-  assert.equal(LEVELS.length,8);
+  assert.equal(LEVELS.length,12);
   for(const level of LEVELS) {
     const g=new GamePhysics(level);
     for(const b of g.bodies){const p=b.plugin;assert.equal(p.health,p.maxHealth);assert.ok(Math.hypot(b.position.x-p.piece.x,b.position.y-p.piece.y)<25);assert.ok(Math.abs(b.angle)<0.12);assert.ok(p.piece.x-p.piece.w/2>=1250);assert.ok(p.piece.x+p.piece.w/2<=1850);}
@@ -109,7 +109,7 @@ test('reported level-eight rocket shot cannot leave a sleeping roof and tank han
 });
 
 test('checked-in level solutions clear each authored puzzle within its ammunition budget',()=>{
-  assert.deepEqual(Object.keys(LEVEL_SOLUTIONS).map(Number).sort((a,b)=>a-b),[1,2,3,4,5,6,7,8]);
+  assert.deepEqual(Object.keys(LEVEL_SOLUTIONS).map(Number).sort((a,b)=>a-b),LEVELS.map(l=>l.id));
   for(const [id,actions] of Object.entries(LEVEL_SOLUTIONS)){
     const level=LEVELS.find(l=>l.id===Number(id));const g=new GamePhysics(level);
     assert.ok(actions.length<=level.shots);
@@ -119,12 +119,11 @@ test('checked-in level solutions clear each authored puzzle within its ammunitio
 });
 
 test('fully collapsed street rubble counts as 100% even when tough chunks retain material health',()=>{
-  const g=new GamePhysics(LEVELS[7]);
+  const g=new GamePhysics(LEVELS[6]);
   const originalAreas=new Map(g.bodies.map(b=>[b,b.area]));
-  // This is the reported pile scenario, using a legal player launch. The
-  // building already physically collapses on this shot; further shots would
-  // only grind intact concrete and steel rubble into smaller fragments.
-  playShot(g,{type:'chakri',vx:32,vy:-6});
+  // A legal Sutli launch physically collapses both reinforced towers; further
+  // shots would only grind intact concrete and steel rubble into fragments.
+  playShot(g,{type:'sutli',vx:26,vy:-4});
   assert.equal(g.status,'won');assert.equal(g.progress,100);
   assert.ok(g.bodies.every(b=>b.plugin.destroyed));
   for(const kind of ['roof','tank','wall','slab','support'])assert.ok(g.bodies.some(b=>b.plugin.originalPiece.kind===kind&&b.plugin.destroyed));
@@ -142,7 +141,7 @@ test('fully collapsed street rubble counts as 100% even when tough chunks retain
 
 test('a tilted tank on a surviving high roof does not count as street rubble',()=>{
   const g=new GamePhysics(LEVELS[7]);
-  for(let i=0;i<3;i++)playShot(g,{type:'chakri',vx:32,vy:0});
+  for(let i=0;i<3;i++)playShot(g,{type:'chakri',vx:29,vy:-2});
   const tank=g.bodies.find(b=>b.plugin.originalPiece.group===2&&b.plugin.originalPiece.kind==='tank');
   assert.ok(Math.abs(tank.angle-tank.plugin.original.angle)>1);
   assert.ok(tank.position.y<500&&tank.position.y-tank.plugin.original.y<15);

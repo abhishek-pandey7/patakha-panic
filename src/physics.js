@@ -284,7 +284,7 @@ export class GamePhysics {
     if (!this.projectile && !this.scheduledPops.length) {
       this.status = 'settling';
       let motion = 0;
-      for (const body of this.bodies) motion += Math.hypot(body.velocity.x, body.velocity.y) + Math.abs(body.angularVelocity) * 10;
+      for (const body of this.bodies) if (!body.plugin.defeated) motion += Math.hypot(body.velocity.x, body.velocity.y) + Math.abs(body.angularVelocity) * 10;
       const meanMotion = motion / Math.max(1, this.bodies.length);
       if (meanMotion < 0.42) this.calmTime += FIXED_STEP;
       else this.calmTime = 0;
@@ -311,8 +311,10 @@ export class GamePhysics {
       }
     } else if (p.type === 'chakri' && p.rollingUntil) {
       Body.setAngularVelocity(projectile, 0.55);
+      // Drive through timber, but stall against brick, concrete or steel so it
+      // spins in place rather than bulldozing towers it can barely damage.
       const rollingSpeed = 15 * p.launchPower;
-      if (projectile.velocity.x < rollingSpeed) Body.setVelocity(projectile, { x: rollingSpeed, y: projectile.velocity.y });
+      if (!p.stalled && projectile.velocity.x < rollingSpeed) Body.setVelocity(projectile, { x: rollingSpeed, y: projectile.velocity.y });
       if (this.time >= p.pulseAt) {
         p.pulseAt = this.time + 165;
         this._explode(x, y, 82, 48, 'chakri', {energy:p.energy,impulse:0.4});
@@ -363,12 +365,14 @@ export class GamePhysics {
             p.rollingUntil = this.time + 2400;
             p.pulseAt = this.time;
             if (other.plugin.piece) this._damage(other, 80 * p.energy * getDamageMultiplier(other.plugin.piece.material,'chakri'), 'chakri');
+            if (other.plugin.piece && !other.plugin.obstacle && other.plugin.piece.material !== 'wood') p.stalled = true;
             Body.setVelocity(projectile, { x: 15 * p.launchPower, y: -0.5 * p.launchPower });
             Body.setAngularVelocity(projectile, 0.55);
             this._emit({ type: 'ability', cracker: 'chakri', x, y, message: 'Spin to win!' });
           } else if (p.type === 'ladi') this._startLadi(x, y);
         } else if (p.type === 'chakri' && other.plugin.piece) {
           this._damage(other, 32 * p.energy * getDamageMultiplier(other.plugin.piece.material,'chakri'), 'chakri');
+          if (!other.plugin.obstacle && other.plugin.piece.material !== 'wood') p.stalled = true;
         }
       }
       const va = a.plugin.priorVelocity || a.velocity;
@@ -414,6 +418,7 @@ export class GamePhysics {
     radius *= Math.min(1.12, Math.sqrt(energy));
     this._emit({ type: 'explosion', cracker, x, y, radius, power:energy * impulseScale });
     for (const body of this.bodies) {
+      if (body.plugin.defeated) continue;
       const dx = body.position.x - x;
       const dy = body.position.y - y;
       const distance = Math.hypot(dx, dy);
@@ -541,6 +546,22 @@ export class GamePhysics {
     }
   }
 
+  /** A tower whose every piece is destroyed leaves the physical scene; the
+   * renderer fades it out. It keeps counting toward progress and score. */
+  _clearDefeatedGroups() {
+    let cleared = false;
+    for (const bodies of this.buildingGroups.values()) {
+      if (!bodies.every(b => b.plugin.destroyed) || bodies.every(b => b.plugin.defeated)) continue;
+      for (const body of bodies) {
+        if (body.plugin.defeated) continue;
+        body.plugin.defeated = true;
+        Composite.remove(this.engine.world, body);
+      }
+      cleared = true;
+    }
+    return cleared;
+  }
+
   _updateProgress() {
     const damagedWeight = this.bodies.reduce((sum, body) => {
       const p = body.plugin;
@@ -568,7 +589,18 @@ export class GamePhysics {
     }
     this._countSettledStructuralRuin();
     this._updateProgress();
+    if (this._clearDefeatedGroups()) {
+      // Anything resting on a removed tower must fall before the shot ends.
+      const loose = this.getUnsupportedBodies();
+      if (loose.length) {
+        for (const body of loose) Sleeping.set(body, false);
+        this.status = 'settling';
+        this.calmTime = 0;
+        return false;
+      }
+    }
     for (const body of this.bodies) {
+      if (body.plugin.defeated) continue;
       Body.setVelocity(body, { x: 0, y: 0 });
       Body.setAngularVelocity(body, 0);
       Sleeping.set(body, true);

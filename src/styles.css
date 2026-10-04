@@ -167,7 +167,7 @@
 #app .ability-button svg{width:calc(16px * var(--ui-scale));height:calc(16px * var(--ui-scale))}
 #app .level-select{display:flex;flex-direction:column;min-height:0}
 #app .section-heading{flex:none}
-#app .level-grid{flex:1;min-height:0;overflow-y:auto;grid-template-rows:repeat(2,minmax(max(150px,calc(166px * var(--ui-scale))),1fr));scrollbar-width:thin;scrollbar-color:#ffcb48 #12273b}
+#app .level-grid{flex:1;min-height:0;overflow-y:auto;grid-template-rows:none;grid-auto-rows:minmax(max(150px,calc(166px * var(--ui-scale))),1fr);scrollbar-width:thin;scrollbar-color:#ffcb48 #12273b}
 #app .level-card{min-width:0;padding:calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));overflow:hidden}
 #app .level-card>strong{overflow-wrap:anywhere}
 #app .level-select-note{flex:none}
@@ -205,7 +205,7 @@
  #app[data-gameplay='true'] #game-canvas{height:calc(100% - var(--ui-tray-band))}
  #app .cracker-toolbar{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(100px,auto);bottom:7px;padding:calc(7px * var(--ui-scale)) 8px;gap:8px;max-width:calc(100% - 24px);width:min(calc(750px * var(--ui-scale)),calc(100% - 24px))}#app .ammo-count{padding-right:calc(9px * var(--ui-scale));gap:calc(7px * var(--ui-scale))}#app .cracker-tray{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:calc(5px * var(--ui-scale));width:100%}#app .cracker-card{width:100%;min-width:0;height:auto;min-height:max(58px,calc(66px * var(--ui-scale)));padding:calc(3px * var(--ui-scale));flex-direction:column;justify-content:center;align-items:center}#app .cracker-card .cracker-icon{width:calc(35px * var(--ui-scale));height:calc(28px * var(--ui-scale))}#app .cracker-card-copy{gap:calc(2px * var(--ui-scale));align-items:center}#app .cracker-name,#app .cracker-role{text-align:center}#app .cracker-lock{top:5px;right:4px}#app .cracker-lock svg{width:11px;height:11px}#app .shot-status{min-width:100px;max-width:calc(126px * var(--ui-scale));padding-left:8px;gap:5px}#app .ability-button{min-height:44px;max-width:100%;padding:4px 6px}#app .ability-button svg{width:12px;height:12px}
  #app .button{min-height:max(44px,calc(44px * var(--ui-scale)));padding:calc(6px * var(--ui-scale)) calc(12px * var(--ui-scale));gap:calc(8px * var(--ui-scale))}#app .button svg{width:calc(15px * var(--ui-scale));height:calc(15px * var(--ui-scale))}#app .start-content h1{font-size:min(calc(min(6.8vw,53px) * var(--ui-scale)),56px)}#app[data-ui-size='4'] .hero-eyebrow,#app[data-ui-size='5'] .hero-eyebrow{display:none}#app[data-ui-size='5'] .start-footer>span:last-child{display:none}
- #app .level-grid{grid-template-rows:repeat(2,minmax(max(97px,calc(97px * var(--ui-scale))),1fr))}#app .level-card{padding:calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));min-height:max(97px,calc(97px * var(--ui-scale)))}#app .level-select-note{margin-top:8px}
+ #app .level-grid{grid-template-rows:none;grid-auto-rows:minmax(max(97px,calc(97px * var(--ui-scale))),1fr)}#app .level-card{padding:calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));min-height:max(97px,calc(97px * var(--ui-scale)))}#app .level-select-note{margin-top:8px}
  #app .screen-settings{padding:82px 18px 18px}#app .settings-card{width:min(580px,100%);padding:18px 22px}#app .settings-card h2{font-size:calc(20px * var(--ui-scale));line-height:1.4;margin-right:48px}#app .settings-card>p{font-size:calc(12px * var(--ui-scale));margin:9px 0 15px}#app .ui-size-label{font-size:calc(12px * var(--ui-scale))}#app .ui-size-controls{gap:12px;margin-top:8px}#app .ui-size-controls .icon-button,#app .modal-card .modal-close{width:44px;height:44px;min-width:44px;min-height:44px}#app .ui-size-ticks{margin:4px 56px 0;font-size:calc(9px * var(--ui-scale))}#app .settings-card>.settings-note{font-size:calc(11px * var(--ui-scale));margin:12px 0}#app .settings-footer{bottom:-18px;margin:0 -22px -18px;padding:8px 22px 18px}#app .settings-footer .button{font-size:calc(12px * var(--ui-scale))}
  #app .modal-secondary .button{min-height:44px;padding:calc(5px * var(--ui-scale)) calc(9px * var(--ui-scale))}#app .material-guide th,#app .material-guide td{padding:calc(6px * var(--ui-scale))}#app .material-guide table{min-width:calc(495px * var(--ui-scale))}
 }
@@ -229,3 +229,5 @@
 @keyframes rotate-hint{0%,20%{transform:rotate(0)}45%,75%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
 .cracker-card .cracker-lock{top:5px;right:5px}
 @media(max-height:690px) and (min-width:701px){.hero-controls{display:none}}
+.level-card.location-4{--city:#c9a24a;--city-accent:#e0735e;background:#3b3122!important}
+.level-card.location-5{--city:#5fb39a;--city-accent:#e3c16a;background:#163a37!important}
