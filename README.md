@@ -79,4 +79,4 @@ See [COLLABORATION.md](COLLABORATION.md) for module boundaries and [CONTRIBUTING
 
 ## Deploy
 
-Every push to `main` runs the tests, builds `dist/` and deploys it to Cloudflare Workers static assets (`.github/workflows/deploy.yml`, config in `wrangler.jsonc`). The workflow needs one repository secret, `CLOUDFLARE_API_TOKEN`, created from the **Edit Cloudflare Workers** token template. Manual deploy: `pnpm build && npx wrangler deploy`.
+Every push to `main` runs the tests, builds `dist/` and deploys it to Cloudflare Workers static assets (`.github/workflows/deploy.yml`, config in `wrangler.jsonc`). The workflow needs one repository secret, `CLOUDFLARE_API_TOKEN`, created from the **Edit Cloudflare Workers** token template. Live at https://play.patakha-panic.workers.dev. Manual deploy: `pnpm build && npx wrangler deploy`.

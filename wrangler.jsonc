@@ -1,5 +1,5 @@
 {
-  "name": "patakha-panic",
+  "name": "play",
   "account_id": "ef61eb63cd42f229812155cce0b78756",
   "compatibility_date": "2026-10-01",
   // Static site: Vite builds into dist/, Cloudflare serves it as Worker static assets.
