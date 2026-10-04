@@ -146,3 +146,4 @@
 }
 @keyframes rotate-hint{0%,20%{transform:rotate(0)}45%,75%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
 .cracker-card .cracker-lock{top:5px;right:5px}
+@media(max-height:690px) and (min-width:701px){.hero-controls{display:none}}
