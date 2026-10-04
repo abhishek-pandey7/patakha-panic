@@ -1,8 +1,11 @@
 import { LEVELS, CRACKERS } from './levels.js';
 import { drawCracker, crackerAtlasReady } from './art.js';
 import * as Physics from './physics.js';
+import { normalizeUIScale as normalizeUISize } from './progress.js';
 
 const TYPES = ['rocket', 'sutli', 'chakri', 'ladi'];
+export const UI_SCALES = [0.8, 0.9, 1, 1.15, 1.3];
+const UI_SIZE_NAMES = ['Small', 'Compact', 'Standard', 'Large', 'Largest'];
 const COMPACT_HINTS = [
   'Full pull. Clear the barricade; boost into striped wood.',
   'Aim below the sign. Break a leg; follow with a low shot.',
@@ -36,6 +39,9 @@ const ICONS = {
   back: '<path d="M20 12H4m6-6-6 6 6 6"/>',
   lock: '<rect x="5" y="10" width="14" height="11"/><path d="M8 10V4h8v6M12 14v3"/>',
   grid: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
+  settings: '<path d="M8 3h8v3h5v12h-5v3H8v-3H3V6h5Z"/><rect x="9" y="9" width="6" height="6"/>',
+  minus: '<path d="M5 12h14"/>',
+  plus: '<path d="M5 12h14M12 5v14"/>',
 };
 const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">${ICONS[name] || ICONS.arrow}</svg>`;
 const diya = (lit = true, index = 0) => `<span class="diya ${lit ? 'is-lit' : ''}" style="--i:${index}" aria-hidden="true"><span class="diya-flame"></span><span class="diya-bowl"></span></span>`;
@@ -47,7 +53,7 @@ const mini = (type, cls = '') => `<canvas class="cracker-icon ${cls}" data-crack
 export class GameUI {
   constructor(callbacks = {}) {
     this.callbacks = callbacks;
-    this.state = { save: { unlocked: 1, best: {}, music: true, sound: true }, selected: 'rocket', level: LEVELS[0], physics: {} };
+    this.state = { save: { unlocked: 1, best: {}, music: true, sound: true, uiScale: 3 }, selected: 'rocket', level: LEVELS[0], physics: {} };
     this.screenName = 'start';
     this.root = document.getElementById('app');
     this.root.innerHTML = `
@@ -62,6 +68,7 @@ export class GameUI {
             <button class="icon-button" id="music-toggle" data-action="music" aria-label="Turn music off" title="Music">${icon('music')}</button>
             <button class="icon-button" id="sound-toggle" data-action="sound" aria-label="Turn sound off" title="Sound effects">${icon('sound')}</button>
             <button class="icon-button" data-action="help" aria-label="How to play" title="How to play">${icon('help')}</button>
+            <button class="icon-button" id="settings-toggle" data-action="settings" aria-label="Settings and UI size" title="Settings · UI size">${icon('settings')}</button>
           </div>
         </header>
         <section id="game-hud" class="game-hud" aria-label="Level status" hidden>
@@ -75,7 +82,7 @@ export class GameUI {
         <div id="cracker-matchup" class="cracker-matchup" aria-label="Selected firecracker material damage" hidden><span id="matchup-title">ROCKET / DAMAGE</span><span id="matchup-materials"></span><span id="matchup-tip">BOOST FOR TOUGH SUPPORTS</span></div>
         <section id="cracker-toolbar" class="cracker-toolbar" aria-label="Choose firecracker" hidden>
           <div class="ammo-count"><strong id="hud-remaining">3</strong><span>SHOTS<br>LEFT</span></div>
-          <div class="cracker-tray">${TYPES.map((type, i) => `<button class="cracker-card" data-type="${type}" aria-label="Choose ${escapeHTML(CRACKERS[type]?.name || type)}">${mini(type)}<span class="cracker-card-copy"><span class="cracker-name">${escapeHTML(CRACKERS[type]?.name || type)}</span><span class="cracker-role">${['Precision', 'Big blast', 'Base breaker', 'Chain reaction'][i]}</span></span><span class="cracker-key">${i + 1}</span><span class="cracker-lock">${icon('lock')}</span></button>`).join('')}</div>
+          <div class="cracker-tray">${TYPES.map((type, i) => `<button class="cracker-card" data-type="${type}" aria-label="Choose ${escapeHTML(CRACKERS[type]?.name || type)}">${mini(type)}<span class="cracker-card-copy"><span class="cracker-name">${escapeHTML(CRACKERS[type]?.name || type)}</span><span class="cracker-role">${['Precision', 'Big blast', 'Roll low', 'Chain pops'][i]}</span></span><span class="cracker-key">${i + 1}</span><span class="cracker-lock">${icon('lock')}</span></button>`).join('')}</div>
           <div class="shot-status"><span id="shot-instruction">DRAG. AIM. RELEASE.</span><button id="ability-button" class="ability-button" data-action="ability" hidden>BOOST ${icon('arrow')}</button></div>
         </section>
         <div id="screen-layer" class="screen-layer"></div>
@@ -98,7 +105,22 @@ export class GameUI {
     this.video.muted = true;
     this.video.play().catch(() => {});
     this.root.addEventListener('click', (event) => this.handleClick(event));
+    this.root.addEventListener('input', (event) => {
+      if (event.target.id === 'ui-scale-slider') this.setUIScale(event.target.value);
+    });
+    this.root.addEventListener('keydown', (event) => {
+      if (this.screenName !== 'settings' || event.key !== 'Tab') return;
+      const controls = [...this.layer.querySelectorAll('button:not(:disabled),input')].filter(node => node.getBoundingClientRect().width);
+      if (!controls.length) return;
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
     this.root.addEventListener('pointerdown', () => this.video.play().catch(() => {}), { once: true });
+    this.applyUIScale(this.state.save.uiScale);
+    this.uiObserver = new ResizeObserver(() => this.queueLayoutMeasurement());
+    for (const id of ['cracker-toolbar', 'game-hud', 'level-hint']) this.uiObserver.observe(document.getElementById(id));
+    window.addEventListener('resize', () => this.queueLayoutMeasurement());
     this.showScreen('start');
     // Draw again when the local atlas has arrived; art.js owns its actual rendering.
     const atlas = new Image();
@@ -123,9 +145,15 @@ export class GameUI {
       return;
     }
     if (action === 'help') { this.openHelp(); return; }
+    if (action === 'settings') { this.openSettings(); return; }
+    if (action === 'close-settings') { this.closeSettings(); return; }
+    if (action === 'ui-smaller' || action === 'ui-larger') {
+      this.setUIScale(normalizeUISize(this.state.save.uiScale) + (action === 'ui-larger' ? 1 : -1));
+      return;
+    }
     if (action === 'close-help') {
       const name = this.helpReturn || 'start';
-      this.showScreen(name);
+      this.showScreen(name, this.helpReturnData || {});
       if (name === 'play') this.callbacks.resume?.();
       return;
     }
@@ -146,9 +174,76 @@ export class GameUI {
   }
 
   openHelp() {
-    this.helpReturn = this.screenName === 'help' ? (this.helpReturn || 'start') : this.screenName;
+    if (this.screenName === 'settings') this.closeSettings();
+    if (this.screenName !== 'help') {
+      this.helpReturn = this.screenName;
+      this.helpReturnData = this.screenData;
+    }
     if (this.helpReturn === 'play') this.callbacks.pause?.();
     this.showScreen('help');
+  }
+
+  openSettings() {
+    if (this.screenName === 'settings') return;
+    this.settingsReturn = { name: this.screenName, data: this.screenData, helpReturn: this.helpReturn, helpReturnData: this.helpReturnData };
+    this.settingsOpener = document.activeElement;
+    if (this.screenName === 'play') this.callbacks.pause?.();
+    this.showScreen('settings');
+    requestAnimationFrame(() => document.getElementById('ui-scale-slider')?.focus());
+  }
+
+  closeSettings() {
+    if (this.screenName !== 'settings') return;
+    const previous = this.settingsReturn || { name: 'start', data: {} };
+    this.helpReturn = previous.helpReturn;
+    this.helpReturnData = previous.helpReturnData;
+    this.showScreen(previous.name, previous.data);
+    this.settingsReturn = null;
+    if (previous.name === 'play') this.callbacks.resume?.();
+    if (this.settingsOpener?.isConnected) this.settingsOpener.focus();
+    else document.getElementById('settings-toggle')?.focus();
+  }
+
+  setUIScale(value) {
+    const size = normalizeUISize(value);
+    this.state.save.uiScale = size;
+    this.applyUIScale(size);
+    this.callbacks.uiScale?.(size);
+  }
+
+  applyUIScale(value) {
+    const size = normalizeUISize(value);
+    if (this.appliedUISize !== size) {
+      this.appliedUISize = size;
+      this.root.dataset.uiSize = String(size);
+      this.root.style.setProperty('--ui-scale', UI_SCALES[size - 1]);
+      this.queueLayoutMeasurement();
+    }
+    const slider = document.getElementById('ui-scale-slider');
+    if (slider) {
+      slider.value = String(size);
+      slider.setAttribute('aria-valuetext', `${size} of 5, ${UI_SIZE_NAMES[size - 1]}`);
+      document.getElementById('ui-scale-value').textContent = `${size} / 5 · ${UI_SIZE_NAMES[size - 1]}`;
+      this.layer.querySelector('[data-action="ui-smaller"]').disabled = size === 1;
+      this.layer.querySelector('[data-action="ui-larger"]').disabled = size === 5;
+    }
+  }
+
+  queueLayoutMeasurement() {
+    if (this.layoutFrame) return;
+    this.layoutFrame = requestAnimationFrame(() => {
+      this.layoutFrame = null;
+      const toolbar = document.getElementById('cracker-toolbar');
+      const compact = matchMedia('(max-height:510px) and (orientation:landscape)').matches;
+      if (toolbar && !toolbar.hidden && compact) {
+        const band = Math.ceil(toolbar.getBoundingClientRect().height + parseFloat(getComputedStyle(toolbar).bottom || 0) + 8);
+        this.root.style.setProperty('--ui-tray-band', `${band}px`);
+      }
+      const hud = document.getElementById('game-hud');
+      if (hud && !hud.hidden) this.root.style.setProperty('--ui-hud-bottom', `${Math.ceil(hud.getBoundingClientRect().bottom)}px`);
+      const hint = document.getElementById('level-hint');
+      if (hint && !hint.hidden) this.root.style.setProperty('--ui-hint-bottom', `${Math.ceil(hint.getBoundingClientRect().bottom)}px`);
+    });
   }
 
   renderIcons() {
@@ -163,12 +258,15 @@ export class GameUI {
 
   update(state) {
     this.state = { ...this.state, ...state, save: state.save || this.state.save };
+    this.applyUIScale(this.state.save.uiScale);
     const { level, physics = {}, selected = 'rocket' } = this.state;
     const compact = window.matchMedia('(max-height: 510px) and (orientation: landscape)').matches;
     const set = (id, text) => { const node = document.getElementById(id); if (node && node.textContent !== String(text)) node.textContent = text; };
     set('hud-level-number', `LEVEL ${String(level?.id || 1).padStart(2, '0')} / 08`);
     set('hud-level-name', level?.name || 'Gully Warm-Up');
-    set('hud-score', compact && physics.score >= 1000 ? `${(physics.score / 1000).toFixed(physics.score >= 100000 ? 0 : 1)}K` : formatScore(physics.score));
+    document.getElementById('hud-level-name').title = level?.name || 'Gully Warm-Up';
+    const compactScore = compact || (this.appliedUISize >= 4 && innerWidth < 1700);
+    set('hud-score', compactScore && physics.score >= 1000 ? `${(physics.score / 1000).toFixed(physics.score >= 100000 ? 0 : 1)}K` : formatScore(physics.score));
     document.getElementById('hud-score').title = `${formatScore(physics.score)} points`;
     document.getElementById('hud-score').setAttribute('aria-label', `${formatScore(physics.score)} points`);
     const progress = Math.max(0, Math.min(100, Math.round(physics.progress || 0)));
@@ -234,6 +332,7 @@ export class GameUI {
   showScreen(name, data = {}) {
     this.root.dataset.aiming = 'false';
     if (data.save) this.state.save = data.save;
+    this.applyUIScale(this.state.save.uiScale);
     if (name !== 'play') {
       clearTimeout(this.toastTimer);
       document.getElementById('toast')?.classList.remove('is-visible');
@@ -241,7 +340,9 @@ export class GameUI {
     this.screenName = name;
     this.screenData = data;
     this.root.dataset.screen = name;
-    const gameplay = ['play', 'pause', 'result', 'unlock'].includes(name) || (name === 'help' && this.helpReturn === 'play');
+    const settingsPrevious = this.settingsReturn?.name;
+    const gameplay = ['play', 'pause', 'result', 'unlock'].includes(name) || (name === 'help' && this.helpReturn === 'play') || (name === 'settings' && (['play','pause','result','unlock'].includes(settingsPrevious) || (settingsPrevious === 'help' && this.helpReturn === 'play')));
+    this.root.dataset.gameplay = String(gameplay);
     document.getElementById('game-hud').hidden = !gameplay;
     document.getElementById('cracker-toolbar').hidden = !gameplay;
     document.getElementById('level-hint').hidden = name !== 'play';
@@ -255,7 +356,14 @@ export class GameUI {
     if (name === 'result') this.renderResult(data);
     if (name === 'unlock') this.renderUnlock(data);
     if (name === 'help') this.renderHelp();
+    if (name === 'settings') this.renderSettings();
     this.renderIcons();
+    this.queueLayoutMeasurement();
+  }
+
+  renderSettings() {
+    this.layer.innerHTML = `<section class="modal-card settings-card" role="dialog" aria-modal="true" aria-labelledby="settings-heading"><button class="icon-button modal-close" data-action="close-settings" aria-label="Close settings">${icon('close')}</button><h2 id="settings-heading">Make it <span>your size.</span></h2><p>Adjust the text and buttons to suit your screen.</p><div class="ui-size-label"><label for="ui-scale-slider">UI SIZE</label><output id="ui-scale-value" for="ui-scale-slider" aria-live="polite"></output></div><div class="ui-size-controls"><button class="icon-button" data-action="ui-smaller" aria-label="Decrease UI size">${icon('minus')}</button><input id="ui-scale-slider" type="range" min="1" max="5" step="1" value="3" aria-describedby="ui-size-description"><button class="icon-button" data-action="ui-larger" aria-label="Increase UI size">${icon('plus')}</button></div><div class="ui-size-ticks" aria-hidden="true"><span>SMALLER</span><span>LARGER</span></div><p id="ui-size-description" class="settings-note">Changes apply instantly and are saved on this device.</p><div class="settings-footer"><button class="button button-primary" data-action="close-settings">LOOKS GOOD ${icon('arrow')}</button></div></section>`;
+    this.applyUIScale(this.state.save.uiScale);
   }
 
   renderStart() {

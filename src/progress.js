@@ -1,5 +1,11 @@
 export const SAVE_KEY = 'patakha-panic-v1';
-export const freshSave = () => ({unlocked: 1, best: {}, seen: [], music: true, sound: true});
+export const freshSave = () => ({unlocked: 1, best: {}, seen: [], music: true, sound: true, uiScale: 3});
+
+export function normalizeUIScale(value) {
+  const number = typeof value === 'number' ? value :
+    typeof value === 'string' && value.trim() ? Number(value) : NaN;
+  return Number.isFinite(number) ? Math.max(1, Math.min(5, Math.round(number))) : 3;
+}
 
 export function loadSave(storage = globalThis.localStorage) {
   try {
@@ -11,6 +17,7 @@ export function loadSave(storage = globalThis.localStorage) {
       seen: Array.isArray(raw.seen) ? raw.seen.filter(x => ['rocket','sutli','chakri','ladi'].includes(x)) : [],
       music: raw.music !== false,
       sound: raw.sound !== false,
+      uiScale: normalizeUIScale(raw.uiScale),
     };
   } catch { return freshSave(); }
 }

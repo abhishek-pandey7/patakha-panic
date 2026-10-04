@@ -16,12 +16,48 @@ try {
   await page.waitForFunction(()=>document.querySelector('video').readyState>2 && document.querySelector('video').currentTime>0);
   assert.equal(await page.locator('video').evaluate(v=>new URL(v.currentSrc).pathname.endsWith('/assets/diwali-background.mp4')),true);
   await page.screenshot({path:path.join(screenshots,'start.png')});
+  async function openSettings() {
+    await page.locator('[data-action="settings"]').click();
+    await page.locator('#ui-scale-slider').waitFor({state:'visible'});
+  }
+  async function setSize(size) {
+    const slider=page.locator('#ui-scale-slider');
+    await slider.focus();
+    await slider.press('Home');
+    for(let i=1;i<size;i++)await slider.press('ArrowRight');
+    assert.equal(await slider.inputValue(),String(size));
+    assert.equal(await page.evaluate(()=>window.__patakha.getState().save.uiScale),size);
+  }
+  assert.equal(await page.evaluate(()=>window.__patakha.getState().save.uiScale),3);
+  const defaultFont=await page.locator('.hero-description').evaluate(e=>parseFloat(getComputedStyle(e).fontSize));
+  await openSettings();
+  await setSize(5);
+  assert.equal(await page.locator('[data-action="ui-larger"]').isDisabled(),true);
+  await page.locator('[data-action="ui-smaller"]').click();
+  assert.equal(await page.locator('#ui-scale-slider').inputValue(),'4');
+  await setSize(1);
+  assert.equal(await page.locator('[data-action="ui-smaller"]').isDisabled(),true);
+  await page.locator('[data-action="ui-larger"]').click();
+  assert.equal(await page.locator('#ui-scale-slider').inputValue(),'2');
+  await setSize(5);
+  await page.locator('#ui-scale-slider').press('Escape');
+  assert.equal(await page.evaluate(()=>window.__patakha.ui.screenName),'start');
+  assert.ok(await page.locator('.hero-description').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))>defaultFont);
+  await page.reload({waitUntil:'networkidle'});
+  assert.equal(await page.evaluate(()=>window.__patakha.getState().save.uiScale),5);
+  await openSettings();
+  assert.equal(await page.locator('#ui-scale-slider').inputValue(),'5');
+  await setSize(3);
+  await page.locator('[data-action="close-settings"]').first().click();
   await page.getByRole('button',{name:'How to play',exact:true}).click();
   await page.getByRole('button',{name:'GOT IT'}).click();
   await page.getByRole('button',{name:'Choose a level',exact:true}).click();
   assert.equal(await page.locator('.level-card').count(),8);
   assert.equal(await page.locator('.level-card:disabled').count(),7);
   await page.locator('[data-level="1"]').click();
+  await openSettings();
+  await page.locator('[data-action="close-settings"]').first().click();
+  assert.equal(await page.evaluate(()=>window.__patakha.ui.screenName),'unlock');
   await page.getByRole('button',{name:'LET’S LIGHT IT UP'}).click();
   await page.getByRole('button',{name:'Pause game',exact:true}).click();
   assert.equal(await page.evaluate(()=>window.__patakha.getState().mode),'pause');
@@ -29,6 +65,22 @@ try {
   await page.getByRole('button',{name:'How to play',exact:true}).click();
   await page.getByRole('button',{name:'GOT IT'}).click();
   assert.equal(await page.evaluate(()=>window.__patakha.getState().mode),'play');
+
+  // A viewport change cancels a held drag instead of firing a stale aim.
+  const held=await page.evaluate(()=>{
+    const renderer=window.__patakha.renderer,r=document.querySelector('#game-canvas').getBoundingClientRect(),v=renderer.viewport;
+    return {x:r.x+v.offsetX+190*v.scale,y:r.y+v.offsetY+510*v.scale,pull:70*v.scale};
+  });
+  await page.mouse.move(held.x,held.y);
+  await page.mouse.down();
+  await page.mouse.move(held.x-held.pull,held.y+held.pull/3);
+  assert.ok(await page.evaluate(()=>window.__patakha.getState().aim));
+  await page.setViewportSize({width:1440,height:860});
+  await page.waitForFunction(()=>window.__patakha.getState().aim===null);
+  await page.mouse.up();
+  assert.equal(await page.evaluate(()=>window.__patakha.getState().physics.shotsUsed),0);
+  await page.setViewportSize({width:1440,height:900});
+  await page.waitForFunction(()=>document.querySelector('#game-canvas').getBoundingClientRect().height===900);
 
   const box=await page.locator('#game-canvas').boundingBox();
   const scale=Math.min(box.width/WORLD.width,box.height/WORLD.height);
@@ -55,6 +107,15 @@ try {
   await page.mouse.up();
   await page.getByRole('button',{name:'BOOST ROCKET'}).click();
   assert.equal(await page.evaluate(()=>window.__patakha.physics.projectile.plugin.activated),true);
+  await openSettings();
+  assert.equal(await page.evaluate(()=>window.__patakha.getState().mode),'pause');
+  const settingsFlight=await page.evaluate(()=>({position:{...window.__patakha.physics.projectile.position},shots:window.__patakha.physics.shotsUsed,score:window.__patakha.physics.score}));
+  await setSize(5);
+  await page.waitForTimeout(180);
+  assert.deepEqual(await page.evaluate(()=>({position:{...window.__patakha.physics.projectile.position},shots:window.__patakha.physics.shotsUsed,score:window.__patakha.physics.score})),settingsFlight);
+  await setSize(3);
+  await page.locator('#ui-scale-slider').press('Escape');
+  assert.equal(await page.evaluate(()=>window.__patakha.getState().mode),'play');
   await page.getByRole('button',{name:'Pause game',exact:true}).click();
   const pausedX=await page.evaluate(()=>window.__patakha.physics.projectile.position.x);
   await page.waitForTimeout(250);
@@ -92,6 +153,10 @@ try {
     assert.ok(await page.evaluate(()=>window.__patakha.renderer.celebration>0));
   }
   await page.screenshot({path:path.join(screenshots,'victory.png')});
+  await openSettings();
+  await page.locator('[data-action="close-settings"]').first().click();
+  assert.equal(await page.evaluate(()=>window.__patakha.ui.screenName),'result');
+  assert.ok(await page.locator('.result-won').isVisible());
   await page.locator('[data-action="next"]').click();
   assert.equal(await page.evaluate(()=>window.__patakha.getState().level),2);
 
@@ -121,5 +186,5 @@ try {
   assert.equal(await page.evaluate(()=>window.__patakha.getState().save.music),false);
   assert.equal(await page.evaluate(()=>window.__patakha.getState().save.sound),false);
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({passed:true,weak,win,collapse,checks:['actual uploaded video playback','start/help/locked levels','pause/resume','real weak drag fails to collapse skyline','long range trajectory','rocket ability','paused flight','retry','real pointer victory','next level and saved unlock','collapsed skyline reads 100% and earns three diyas','audio persistence'],errors}));
+  console.log(JSON.stringify({passed:true,weak,win,collapse,checks:['actual uploaded video playback','live UI sizes 1–5 and button bounds','saved UI size after reload','settings returns to unlock and result','UI resizing preserves paused flight','resizing cancels held aim without firing','start/help/locked levels','pause/resume','real weak drag fails to collapse skyline','long range trajectory','rocket ability','paused flight','retry','real pointer victory','next level and saved unlock','collapsed skyline reads 100% and earns three diyas','audio persistence'],errors}));
 } finally {await browser.close();}

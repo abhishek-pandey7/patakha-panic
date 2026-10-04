@@ -18,7 +18,7 @@ The logical world is 1920 × 960, with ground at Y=780 and the launcher at (190,
 
 1. Run `pnpm test` and `pnpm build`.
 2. Play at least one level using a real drag and release. Check ability activation, shot settling, retry and win screens.
-3. Check a phone-sized landscape viewport. Buttons and the aiming arc should remain readable and touchable.
+3. Check a phone-sized landscape viewport at UI sizes 1 and 5 (Settings gear). Buttons and the aiming arc should remain readable and touchable; UI size must persist after reload without changing shot power or resetting a paused shot.
 4. If you change levels or damage balance, prove each affected level can clear 90% within its budget. Verify weak shots, unboosted impacts, misplaced shots and wrong-material matchups do not clear a skyline automatically; later levels should need multiple deliberate shots.
 5. Confirm start, level selection, pause/resume, restart, audio toggles and progress after a reload.
 

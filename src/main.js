@@ -4,7 +4,7 @@ import {LEVELS, CRACKERS} from './levels.js';
 import {SceneRenderer} from './art.js';
 import {GameUI} from './ui.js';
 import {GameAudio} from './audio.js';
-import {loadSave, writeSave, awardDiyas, recordResult} from './progress.js';
+import {loadSave, writeSave, awardDiyas, recordResult, normalizeUIScale} from './progress.js';
 import {WORLD} from './config.js';
 
 const LAUNCHER = WORLD.launcher;
@@ -24,6 +24,23 @@ let keyboardPull = {x:-100,y:30};
 const audio = new GameAudio();
 
 function persist() { writeSave(save); }
+function cancelAim() {
+  const capturedPointer = pointerId;
+  pointerId = null;
+  aim = null;
+  const surface = document.getElementById('game-canvas');
+  if (capturedPointer !== null && surface?.hasPointerCapture(capturedPointer)) {
+    surface.releasePointerCapture(capturedPointer);
+  }
+  document.getElementById('app').dataset.aiming = 'false';
+}
+function setUIScale(value) {
+  cancelAim();
+  save.uiScale = normalizeUIScale(value);
+  persist();
+  updateUI();
+  renderer?.resize();
+}
 function setAudio(name, enabled) {
   unlockAudio();
   save[name] = typeof enabled === 'boolean' ? enabled : !save[name];
@@ -47,7 +64,8 @@ const ui = new GameUI({
   menu: showLevels,
   music: enabled => setAudio('music',enabled),
   sound: enabled => setAudio('sound',enabled),
-  home: () => { mode='start';aim=null;ui.showScreen('start',{save});updateUI(); },
+  uiScale: setUIScale,
+  home: () => { cancelAim();mode='start';ui.showScreen('start',{save});updateUI(); },
   ability: activate,
   help: () => { if (mode === 'play') pause('help'); else ui.showScreen('help',{onClose:()=>ui.showScreen(mode)}); },
   landscape: async () => {
@@ -78,8 +96,7 @@ function startLevel(id) {
   level = LEVELS.find(l => l.id === Number(id)) || LEVELS[0];
   physics.load(level);
   selected = level.unlockedTypes.at(-1) || 'rocket';
-  aim = null;
-  pointerId = null;
+  cancelAim();
   resultShown = false;
   celebrating = false;
   slowMotion = 0;
@@ -97,13 +114,13 @@ function startLevel(id) {
 }
 
 function showLevels() {
-  mode = 'levels'; aim = null; pointerId = null;
+  cancelAim(); mode = 'levels';
   ui.showScreen('levels',{save}); updateUI();
 }
 
 function pause(screen='pause') {
   if (mode !== 'play') return;
-  mode = screen; aim=null; pointerId=null;
+  cancelAim(); mode = screen;
   ui.showScreen(screen,{onClose:resume});
 }
 
@@ -191,6 +208,9 @@ canvas.addEventListener('pointerup',e=>{
 canvas.addEventListener('pointercancel',()=>{pointerId=null;aim=null;});
 
 window.addEventListener('keydown',e=>{
+  if (e.code === 'Escape' && ui.screenName === 'settings') {
+    e.preventDefault(); ui.closeSettings(); return;
+  }
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   if (e.code==='Escape') { if (mode==='play') pause(); else if (mode==='pause'||mode==='help') resume(); }
   if (mode!=='play') return;
@@ -221,11 +241,18 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden && mode==='
 const portraitGate=window.matchMedia('(orientation: portrait) and (pointer: coarse)');
 portraitGate.addEventListener('change',()=>{
   if(!portraitGate.matches)return;
-  aim=null;pointerId=null;
+  cancelAim();
   if(mode==='play')pause();
 });
-window.addEventListener('resize',()=>renderer.resize());
-new ResizeObserver(()=>renderer.resize()).observe(canvas);
+let canvasSize = canvas.getBoundingClientRect();
+function resizeScene() {
+  const nextSize = canvas.getBoundingClientRect();
+  if (nextSize.width !== canvasSize.width || nextSize.height !== canvasSize.height) cancelAim();
+  canvasSize = nextSize;
+  renderer.resize();
+}
+window.addEventListener('resize',resizeScene);
+new ResizeObserver(resizeScene).observe(canvas);
 
 let previous=performance.now();
 function frame(now) {

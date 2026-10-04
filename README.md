@@ -36,6 +36,9 @@ The `dist/` folder is a complete static game. Serve it over HTTP or upload it to
 | Choose cracker | Select an unlocked cracker in the bottom tray | 1–4 |
 | Pause / resume | Pause button / resume button | Escape |
 | Restart | Restart button | R |
+| UI size | Settings gear → UI size, choose 1–5 with the slider or −/+ buttons | Focus the slider and use arrow keys; Escape closes settings |
+
+UI size 1 is compact, 3 is the default, and 5 is largest. Text, menus and controls resize immediately; game physics and shot power remain the same. Opening settings pauses an active level, and closing it resumes the same shot. The chosen size is remembered locally with your progress and audio preferences.
 
 Rocket gets one precise, piercing mid-air boost. Sutli Bomb has a wide heavy blast. Chakri spins and rolls through street-level supports. Ladi sends a timed chain of small explosions towards neighbouring buildings. Abilities unlock with short illustrated explanations.
 
