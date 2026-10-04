@@ -39,6 +39,8 @@ const ICONS = {
 };
 const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">${ICONS[name] || ICONS.arrow}</svg>`;
 const diya = (lit = true, index = 0) => `<span class="diya ${lit ? 'is-lit' : ''}" style="--i:${index}" aria-hidden="true"><span class="diya-flame"></span><span class="diya-bowl"></span></span>`;
+// Android browsers can lock orientation, but only while the page is full screen.
+const canLockLandscape = () => Boolean(document.documentElement.requestFullscreen && screen.orientation?.lock);
 const mini = (type, cls = '') => `<canvas class="cracker-icon ${cls}" data-cracker="${type}" width="160" height="120" aria-hidden="true"></canvas>`;
 
 /** DOM interface for the game. Simulation and transitions remain in main.js. */
@@ -78,7 +80,13 @@ export class GameUI {
         </section>
         <div id="screen-layer" class="screen-layer"></div>
         <div id="toast" class="game-toast" role="status" aria-live="polite"></div>
-        <div class="portrait-nudge" aria-hidden="true"><span>↻</span>More skyline, more dhamaka.<small>Turn your phone sideways for the best view.</small></div>
+        <section class="rotate-gate" role="alertdialog" aria-modal="true" aria-labelledby="rotate-heading" aria-describedby="rotate-copy">
+          <div class="rotate-phone" aria-hidden="true"><span></span></div>
+          <span class="eyebrow">MORE SKYLINE. MORE DHAMAKA.</span>
+          <h2 id="rotate-heading">Turn it <span>sideways.</span></h2>
+          <p id="rotate-copy">Patakha Panic plays in landscape. Rotate your device to continue.</p>
+          ${canLockLandscape() ? `<button class="button button-primary" data-action="landscape">PLAY FULL SCREEN ${icon('arrow')}</button>` : ''}
+        </section>
       </main>`;
     this.canvas = document.getElementById('game-canvas');
     this.canvas.addEventListener('pointerdown', () => {

@@ -50,6 +50,10 @@ const ui = new GameUI({
   home: () => { mode='start';aim=null;ui.showScreen('start',{save});updateUI(); },
   ability: activate,
   help: () => { if (mode === 'play') pause('help'); else ui.showScreen('help',{onClose:()=>ui.showScreen(mode)}); },
+  landscape: async () => {
+    unlockAudio();
+    try { await document.documentElement.requestFullscreen({navigationUI:'hide'}); await screen.orientation.lock('landscape'); } catch {}
+  },
 });
 
 renderer = new SceneRenderer(ui.canvas || document.getElementById('game-canvas'));
@@ -213,6 +217,13 @@ window.addEventListener('keydown',e=>{
   }
 });
 document.addEventListener('visibilitychange',()=>{if(document.hidden && mode==='play')pause();});
+// Touch devices in portrait see the rotate gate (styles.css); freeze the level behind it.
+const portraitGate=window.matchMedia('(orientation: portrait) and (pointer: coarse)');
+portraitGate.addEventListener('change',()=>{
+  if(!portraitGate.matches)return;
+  aim=null;pointerId=null;
+  if(mode==='play')pause();
+});
 window.addEventListener('resize',()=>renderer.resize());
 new ResizeObserver(()=>renderer.resize()).observe(canvas);
 
