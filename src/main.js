@@ -74,7 +74,16 @@ const ui = new GameUI({
   },
 });
 
-renderer = new SceneRenderer(ui.canvas || document.getElementById('game-canvas'));
+// The cracker tray covers the bottom of the screen during play; the renderer
+// keeps street level just above it.
+const tray = document.getElementById('cracker-toolbar');
+renderer = new SceneRenderer(ui.canvas || document.getElementById('game-canvas'), {
+  bottomInset: () => {
+    if (!tray || tray.hidden) return 0;
+    const box = tray.getBoundingClientRect(), stage = tray.offsetParent?.getBoundingClientRect();
+    return box.height && stage ? stage.bottom - box.top + 6 : 0;
+  },
+});
 physics = new GamePhysics(level, onEvent);
 audio.setMusic(save.music);
 audio.setSound(save.sound);
@@ -252,7 +261,9 @@ function resizeScene() {
   renderer.resize();
 }
 window.addEventListener('resize',resizeScene);
-new ResizeObserver(resizeScene).observe(canvas);
+const sceneObserver = new ResizeObserver(resizeScene);
+sceneObserver.observe(canvas);
+if (tray) sceneObserver.observe(tray);
 
 let previous=performance.now();
 function frame(now) {

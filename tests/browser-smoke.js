@@ -83,8 +83,8 @@ try {
   await page.waitForFunction(()=>document.querySelector('#game-canvas').getBoundingClientRect().height===900);
 
   const box=await page.locator('#game-canvas').boundingBox();
-  const scale=Math.min(box.width/WORLD.width,box.height/WORLD.height);
-  const ox=box.x+(box.width-WORLD.width*scale)/2,oy=box.y+(box.height-WORLD.height*scale)/2;
+  const view=await page.evaluate(()=>window.__patakha.renderer.viewport);
+  const scale=view.scale,ox=box.x+view.offsetX,oy=box.y+view.offsetY;
   async function drag(pull) {
     const camera=await page.evaluate(()=>Math.round(window.__patakha.renderer.cameraX/3)*3);
     await page.mouse.move(ox+(WORLD.launcher.x-camera)*scale,oy+WORLD.launcher.y*scale);

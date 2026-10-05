@@ -3,6 +3,8 @@ import { WORLD } from './config.js';
 
 const { width: W, height: H, ground: GROUND, launcher: LAUNCH, maxSpeed: MAX_SPEED } = WORLD;
 const PIXEL = 3, INK = '#152039', GOLD = '#ffcf66', FADE_MS = 1200;
+// World units of road kept visible above a bottom UI tray.
+const ROAD_PEEK = 36;
 const COLORS = ['#ffcf66', '#ff7698', '#6df1c7', '#ab91fb', '#78d9ff'];
 const MATERIAL_STYLE = {
   wood: { dark: '#654431', main: '#b97e49', light: '#edb77a', badge: '#ffc66c', strength: 1 },
@@ -89,7 +91,9 @@ export function drawCracker(ctx, type, x, y, size, angle = 0) {
 }
 
 export class SceneRenderer {
-  constructor(canvas) {
+  /** bottomInset() returns the screen pixels a UI tray covers at the bottom. */
+  constructor(canvas, { bottomInset = () => 0 } = {}) {
+    this.bottomInset = bottomInset;
     this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.time = 0;
     this.pixelCanvas = document.createElement('canvas'); this.pixelCanvas.width = W / PIXEL; this.pixelCanvas.height = H / PIXEL;
     this.pixelCtx = this.pixelCanvas.getContext('2d'); this.pixelCtx.imageSmoothingEnabled = false;
@@ -103,8 +107,13 @@ export class SceneRenderer {
     const rect = this.canvas.getBoundingClientRect(), width = rect.width || W, height = rect.height || H;
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.canvas.width = Math.round(width * this.dpr); this.canvas.height = Math.round(height * this.dpr);
-    const scale = Math.min(width / W, height / H);
-    this.viewport = { scale, offsetX: (width - W * scale) / 2, offsetY: (height - H * scale) / 2, width, height };
+    // Anchor the world to the bottom: everything above street level stays in
+    // view above any UI tray, and the road continues behind the tray to the
+    // screen's bottom and side edges (see drawGround) instead of floating.
+    const inset = Math.max(0, Math.min(height * .45, this.bottomInset() || 0));
+    const usable = height - inset, visible = GROUND + (inset ? ROAD_PEEK : H - GROUND);
+    const scale = Math.min(width / W, usable / visible);
+    this.viewport = { scale, offsetX: (width - W * scale) / 2, offsetY: usable - visible * scale, width, height };
     this.ctx.imageSmoothingEnabled = false;
   }
 
@@ -172,7 +181,8 @@ export class SceneRenderer {
     const follow = projectile && (phy.status === 'flight' || phy.status === 'settling');
     const desiredX = follow ? Math.min(24, Math.max(0, (projectile.position.x - LAUNCH.x - 450) * .022)) : 0;
     this.cameraX += (desiredX - this.cameraX) * .045; this.shake *= .87;
-    ctx.save(); ctx.translate(-q(this.cameraX) + q(rand(-this.shake, this.shake)), q(rand(-this.shake * .6, this.shake * .6)));
+    const tx = -q(this.cameraX) + q(rand(-this.shake, this.shake)), ty = q(rand(-this.shake * .6, this.shake * .6));
+    ctx.save(); ctx.translate(tx, ty);
     const showcase = state.mode === 'start' ? LEVELS[3] : null;
     this.drawGround(ctx); if (!showcase) this.drawLauncherBuilding(ctx);
     const bodies = showcase ? showcase.pieces.map(piece => ({ position: piece, angle: piece.angle || 0, plugin: { piece, health: 100, maxHealth: 100 } })) : phy.bodies || [];
@@ -189,16 +199,21 @@ export class SceneRenderer {
     out.setTransform(1, 0, 0, 1, 0, 0); out.clearRect(0, 0, this.canvas.width, this.canvas.height);
     out.imageSmoothingEnabled = false;
     out.setTransform(this.dpr * v.scale, 0, 0, this.dpr * v.scale, this.dpr * v.offsetX, this.dpr * v.offsetY);
+    // Street beyond the fixed world rectangle, so it reaches every screen edge.
+    out.save(); out.translate(tx, ty);
+    this.drawGround(out, -v.offsetX / v.scale - tx - 30, (v.width - v.offsetX) / v.scale - tx + 30, (v.height - v.offsetY) / v.scale + 30);
+    out.restore();
     out.drawImage(this.pixelCanvas, 0, 0, W, H);
   }
 
-  drawGround(ctx) {
-    fill(ctx, '#223247', -30, GROUND, W + 60, H - GROUND);
-    fill(ctx, '#8697a2', -30, GROUND, W + 60, 6);
-    fill(ctx, '#4c6575', -30, GROUND + 6, W + 60, 12);
-    fill(ctx, '#131f33', -30, GROUND + 18, W + 60, 9);
-    for (let x = 0; x < W; x += 78) { fill(ctx, '#3c5062', x + 12, GROUND + 35, 30, 3); fill(ctx, '#192b40', x, GROUND + 65, 63, 3); }
-    for (let x = 0; x < W; x += 114) fill(ctx, '#192a40', x, GROUND + 3, 3, 18);
+  drawGround(ctx, x0 = -30, x1 = W + 30, bottom = H) {
+    const w = x1 - x0;
+    fill(ctx, '#223247', x0, GROUND, w, bottom - GROUND);
+    fill(ctx, '#8697a2', x0, GROUND, w, 6);
+    fill(ctx, '#4c6575', x0, GROUND + 6, w, 12);
+    fill(ctx, '#131f33', x0, GROUND + 18, w, 9);
+    for (let x = Math.floor(x0 / 78) * 78; x < x1; x += 78) { fill(ctx, '#3c5062', x + 12, GROUND + 35, 30, 3); fill(ctx, '#192b40', x, GROUND + 65, 63, 3); }
+    for (let x = Math.floor(x0 / 114) * 114; x < x1; x += 114) fill(ctx, '#192a40', x, GROUND + 3, 3, 18);
     // No foreground diyas; background decoration comes directly from the source video.
   }
 
