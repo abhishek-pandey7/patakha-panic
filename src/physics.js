@@ -22,6 +22,10 @@ const touching=(a,b)=>{
 export const LAUNCHER = WORLD.launcher;
 export const GROUND_Y = WORLD.ground;
 export const FIXED_STEP = 1000 / 60;
+// A shot has settled when no awake piece moves faster than this (speed + 10x spin).
+const SETTLED_MOTION = 0.3;
+// Pieces tilted further than this from upright or flat (radians) never sleep.
+const LEAN_AWAKE = 0.1;
 const AIR = 0.002;
 const GRAVITY = 1;
 const GRAVITY_SCALE = 0.001;
@@ -90,6 +94,7 @@ export class GamePhysics {
     this.time = 0;
     this.shotTime = 0;
     this.calmTime = 0;
+    this.idleRuinCheckAt = 0;
     this.lastDestructionTime = -10000;
     this.streak = 0;
     this.destroyedGroups = new Set();
@@ -124,7 +129,9 @@ export class GamePhysics {
         frictionStatic: 0.95,
         frictionAir: 0.005,
         restitution: 0.035,
-        sleepThreshold: 50,
+        // Matter sleeps a body after this many slow steps. Long enough that a
+        // slowly tipping tower picks up speed instead of freezing mid-lean.
+        sleepThreshold: 240,
         chamfer: { radius: Math.min(2, piece.w / 6, piece.h / 6) },
         label: `target-${piece.material}`,
       });
@@ -224,13 +231,41 @@ export class GamePhysics {
   }
 
   update(dtMs) {
-    if (!this.level || (this.status === 'ready'&&!this.needsSupportCheck) || this.status === 'won' || this.status === 'lost') return;
-    if(this.status==='ready'&&this.needsSupportCheck)this.status='settling';
+    if (!this.level) return;
     this.accumulator += Math.min(100, Math.max(0, dtMs || 0));
     let safety = 0;
     while (this.accumulator >= FIXED_STEP && safety++ < 7) {
       this.accumulator -= FIXED_STEP;
-      this._step();
+      // After a win or loss the scene keeps playing out behind the result.
+      if (['ready', 'won', 'lost'].includes(this.status)) this._idleStep();
+      else this._step();
+    }
+  }
+
+  /** Between shots the world keeps running, so an imbalanced structure
+   * finishes falling (or comes to rest) instead of freezing where the shot
+   * ended. A late collapse can still clear the level. */
+  _idleStep() {
+    if (!this.bodies.some(b => !b.plugin.defeated && !b.isSleeping)) return;
+    this.time += FIXED_STEP;
+    for (const body of this.bodies) body.plugin.priorVelocity = { ...body.velocity };
+    Engine.update(this.engine, FIXED_STEP);
+    this._keepLeaningAwake();
+    // After a result the motion is only for show: score and progress are final.
+    if (this.status !== 'ready') return;
+    this._applyStructuralStrain();
+    this._removeLostBodies();
+    this._updateProgress();
+    if (this.time >= this.supportCheckAt) {
+      this.supportCheckAt = this.time + 100;
+      for (const body of this.getUnsupportedBodies()) Sleeping.set(body, false);
+    }
+    if (this.time >= this.idleRuinCheckAt) {
+      this.idleRuinCheckAt = this.time + 500;
+      this._countSettledStructuralRuin();
+      this._updateProgress();
+      this._clearDefeatedGroups();
+      if (this.status === 'ready' && this.progress >= 90 - 0.0001) this._win();
     }
   }
 
@@ -248,6 +283,34 @@ export class GamePhysics {
         this._explode(pop.x, pop.y, pop.radius, pop.strength, 'ladi', {energy:pop.energy});
       }
     }
+    this._keepLeaningAwake();
+    this._applyStructuralStrain();
+    this._removeLostBodies();
+    this._updateProgress();
+    if(this.needsSupportCheck||this.time>=this.supportCheckAt){
+      this.supportCheckAt=this.time+100;
+      this.needsSupportCheck=false;
+      for(const body of this.getUnsupportedBodies())Sleeping.set(body,false);
+    }
+    this._advanceShot();
+  }
+
+  /** Matter puts slow bodies to sleep, which would freeze a tower that is only
+   * starting to tip. Pieces at rest sit square (upright or flat), so a piece
+   * leaning away from every right angle is kept awake until it falls or
+   * really comes to rest. */
+  _keepLeaningAwake() {
+    for (const body of this.bodies) {
+      if (body.plugin.defeated) continue;
+      const lean = Math.abs(body.angle - Math.round(body.angle / (Math.PI / 2)) * (Math.PI / 2));
+      if (lean < LEAN_AWAKE) continue;
+      if (body.isSleeping) Sleeping.set(body, false);
+      else body.sleepCounter = 0;
+    }
+  }
+
+  /** Falling pieces take collapse or strain damage, during and between shots. */
+  _applyStructuralStrain() {
     for (const body of this.bodies) {
       const p = body.plugin;
       if (p.destroyed) continue;
@@ -269,12 +332,21 @@ export class GamePhysics {
         }
       }
     }
-    this._updateProgress();
-    if(this.needsSupportCheck||this.time>=this.supportCheckAt){
-      this.supportCheckAt=this.time+100;
-      this.needsSupportCheck=false;
-      for(const body of this.getUnsupportedBodies())Sleeping.set(body,false);
+  }
+
+  /** A piece that leaves the world is gone: it counts as destroyed and stops
+   * being simulated, so it cannot keep a shot from ever settling. */
+  _removeLostBodies() {
+    for (const body of this.bodies) {
+      const { x, y } = body.position;
+      if (body.plugin.defeated || (x > -150 && x < WORLD.width + 150 && y < WORLD.height + 150)) continue;
+      if (!body.plugin.destroyed) this._markStructuralRuin(body);
+      body.plugin.defeated = true;
+      Composite.remove(this.engine.world, body);
     }
+  }
+
+  _advanceShot() {
     if (this.projectile && this.shotTime > 5600) {
       const { x, y } = this.projectile.position;
       if (this.projectile.plugin.type === 'sutli') this._explode(x, y, 210, 270, 'sutli', {energy:this.projectile.plugin.energy});
@@ -283,14 +355,18 @@ export class GamePhysics {
     }
     if (!this.projectile && !this.scheduledPops.length) {
       this.status = 'settling';
-      let motion = 0;
-      for (const body of this.bodies) if (!body.plugin.defeated) motion += Math.hypot(body.velocity.x, body.velocity.y) + Math.abs(body.angularVelocity) * 10;
-      const meanMotion = motion / Math.max(1, this.bodies.length);
-      if (meanMotion < 0.42) this.calmTime += FIXED_STEP;
+      // The shot ends only when every piece is at rest: an average would let
+      // one slowly toppling tower be frozen mid-fall by many still pieces.
+      let maxMotion = 0;
+      for (const body of this.bodies) {
+        if (body.plugin.defeated || body.isSleeping) continue;
+        maxMotion = Math.max(maxMotion, Math.hypot(body.velocity.x, body.velocity.y) + Math.abs(body.angularVelocity) * 10);
+      }
+      if (maxMotion < SETTLED_MOTION) this.calmTime += FIXED_STEP;
       else this.calmTime = 0;
-      if ((this.calmTime >= 620 && this.shotTime > 1200) || this.shotTime >= 8600) this._finishShot();
+      if ((this.calmTime >= 620 && this.shotTime > 1200) || this.shotTime >= 14000) this._finishShot();
     }
-    if (this.shotTime >= 10000) {
+    if (this.shotTime >= 16000) {
       this.scheduledPops.length = 0;
       this._removeProjectile();
       this._finishShot();
@@ -329,7 +405,7 @@ export class GamePhysics {
   }
 
   _onCollision({ pairs }) {
-    if (this.initializing || this.status === 'ready' || this.status === 'won' || this.status === 'lost') return;
+    if (this.initializing || this.status === 'won' || this.status === 'lost') return;
     for (const pair of pairs) {
       const a = pair.bodyA;
       const b = pair.bodyB;
@@ -599,22 +675,22 @@ export class GamePhysics {
         return false;
       }
     }
-    for (const body of this.bodies) {
-      if (body.plugin.defeated) continue;
-      Body.setVelocity(body, { x: 0, y: 0 });
-      Body.setAngularVelocity(body, 0);
-      Sleeping.set(body, true);
-    }
-    if (this.progress >= 90 - 0.0001) {
-      this.status = 'won';
-      this.score += Math.max(0, this.level.shots - this.shotsUsed) * 1000;
-      this._emit({ type: 'win', score: this.score, progress: this.progress, remaining: this.level.shots - this.shotsUsed });
-    } else if (this.shotsUsed >= this.level.shots) {
+    // Nothing is frozen here: pieces keep their motion and the world keeps
+    // running between shots (_idleStep) until Matter puts them to sleep.
+    if (this.progress >= 90 - 0.0001) this._win();
+    else if (this.shotsUsed >= this.level.shots) {
       this.status = 'lost';
       this._emit({ type: 'lose', score: this.score, progress: this.progress, remaining: 0 });
     } else this.status = 'ready';
     this.needsSupportCheck=false;
     return true;
+  }
+
+  _win() {
+    if (this.status === 'won') return;
+    this.status = 'won';
+    this.score += Math.max(0, this.level.shots - this.shotsUsed) * 1000;
+    this._emit({ type: 'win', score: this.score, progress: this.progress, remaining: this.level.shots - this.shotsUsed });
   }
 
   /** Real contacts to terrain/obstacles, independent of Matter's sleep-pair

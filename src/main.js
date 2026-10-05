@@ -281,7 +281,8 @@ let previous=performance.now();
 function frame(now) {
   const dt=Math.min(50,now-previous);previous=now;time+=dt;
   slowMotion=Math.max(0,slowMotion-dt);
-  if (mode==='play') physics.update(dt*(slowMotion>0?.45:1));
+  // The scene keeps playing out behind the result screen.
+  if (mode==='play' || mode==='result') physics.update(dt*(slowMotion>0?.45:1));
   const state=physics.getState();
   if(mode==='play' && (state.status==='won'||state.status==='lost'))finish(state);
   renderer.render({physics:state,level,time,aim,selected,events:[],mode,celebrating},dt);
