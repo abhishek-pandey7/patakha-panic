@@ -68,10 +68,7 @@ const ui = new GameUI({
   home: () => { cancelAim();mode='start';ui.showScreen('start',{save});updateUI(); },
   ability: activate,
   help: () => { if (mode === 'play') pause('help'); else ui.showScreen('help',{onClose:()=>ui.showScreen(mode)}); },
-  landscape: async () => {
-    unlockAudio();
-    try { await document.documentElement.requestFullscreen({navigationUI:'hide'}); await screen.orientation.lock('landscape'); } catch {}
-  },
+  landscape: () => { unlockAudio(); enterFullscreen(true); },
 });
 
 // The cracker tray covers the bottom of the screen during play; the renderer
@@ -94,6 +91,18 @@ function updateUI() {
   ui.update({level,physics:physics.getState(),selected,save});
 }
 
+// Phones hide the browser's address and status bars by going full screen and
+// locking landscape. Browsers only allow this inside a tap, so game buttons
+// call it; iPhone Safari has no page full screen and simply ignores it.
+const touchScreen = window.matchMedia('(pointer: coarse)');
+function enterFullscreen(always = false) {
+  const root = document.documentElement;
+  if ((!always && !touchScreen.matches) || document.fullscreenElement || !root.requestFullscreen) return;
+  root.requestFullscreen({navigationUI:'hide'})
+    .then(() => screen.orientation?.lock?.('landscape'))
+    .catch(() => {});
+}
+
 function unlockAudio() {
   audio.unlock();
   const video = document.querySelector('video');
@@ -101,6 +110,7 @@ function unlockAudio() {
 }
 
 function startLevel(id) {
+  enterFullscreen();
   unlockAudio();
   level = LEVELS.find(l => l.id === Number(id)) || LEVELS[0];
   physics.load(level);
@@ -123,6 +133,7 @@ function startLevel(id) {
 }
 
 function showLevels() {
+  enterFullscreen();
   cancelAim(); mode = 'levels';
   ui.showScreen('levels',{save}); updateUI();
 }
@@ -134,6 +145,7 @@ function pause(screen='pause') {
 }
 
 function resume() {
+  enterFullscreen();
   unlockAudio(); mode='play'; ui.showScreen('play'); updateUI();
 }
 
