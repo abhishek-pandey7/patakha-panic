@@ -258,3 +258,28 @@
   #app .modal-card .button{min-height:36px}
   #app .modal-secondary{margin-top:6px}#app .modal-card .text-button{margin-top:6px}
 }
+/* Phone landscape: keep the playfield clear. Slim HUD and tray; tips flash then fade (ui.js flashTips). */
+@media(max-height:510px) and (orientation:landscape){
+  #app .game-header{padding-top:6px;padding-bottom:6px}
+  #app .header-actions .icon-button,#app .game-hud .icon-button{width:40px;height:40px;min-width:40px;min-height:40px}
+  #app .game-hud{top:6px;height:calc(46px * var(--ui-scale));padding:2px calc(6px * var(--ui-scale));gap:6px}
+  #app .hud-location .eyebrow,#app .hud-stat .eyebrow{font-size:calc(9px * var(--ui-scale));line-height:1.2}
+  #app .hud-location{gap:1px}#app .hud-stat{gap:1px}
+  #app .hud-location strong{font-size:calc(12px * var(--ui-scale));line-height:1.25}
+  #app .hud-stat strong,#app .meter-label strong{font-size:calc(17px * var(--ui-scale));line-height:1.1}
+  #app .meter-label{margin-bottom:3px}
+  #app .cracker-toolbar{bottom:4px;grid-template-columns:auto minmax(0,1fr) auto;padding:calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));gap:calc(8px * var(--ui-scale))}
+  #app .ammo-count{padding-right:calc(8px * var(--ui-scale));gap:calc(6px * var(--ui-scale))}
+  #app .ammo-count>strong{font-size:calc(26px * var(--ui-scale))}
+  #app .cracker-card{min-height:0;height:calc(40px * var(--ui-scale));width:calc(132px * var(--ui-scale));padding:0 calc(6px * var(--ui-scale)) 0 2px}
+  #app .cracker-card .cracker-icon{width:calc(34px * var(--ui-scale));height:calc(30px * var(--ui-scale))}
+  #app .cracker-card{flex-direction:row;align-items:center;justify-content:flex-start;gap:calc(4px * var(--ui-scale))}
+  #app .cracker-card-copy{align-items:flex-start}
+  #app .cracker-name{white-space:nowrap}
+  #app .cracker-role,#app #shot-instruction{display:none}
+  #app .cracker-lock{top:4px;right:4px}
+  #app .shot-status{min-width:0;max-width:none;padding-left:0;border-left:0}
+  #app .ability-button{min-height:calc(34px * var(--ui-scale));padding:2px calc(10px * var(--ui-scale))}
+  #app #level-hint,#app #cracker-matchup{transition:opacity .45s,visibility .45s}
+  #app[data-tips='hide'] #level-hint,#app[data-tips='hide'] #cracker-matchup{opacity:0;visibility:hidden}
+}

@@ -137,7 +137,7 @@ export class GameUI {
   handleClick(event) {
     const target = event.target.closest('button');
     if (!target || target.disabled) return;
-    if (target.matches('.cracker-card') && target.dataset.type) { this.callbacks.select?.(target.dataset.type); return; }
+    if (target.matches('.cracker-card') && target.dataset.type) { this.callbacks.select?.(target.dataset.type); this.flashTips(3000); return; }
     if (target.dataset.level) { this.callbacks.level?.(Number(target.dataset.level)); return; }
     const action = target.dataset.action;
     if (!action) return;
@@ -333,7 +333,15 @@ export class GameUI {
     }
   }
 
+  /** On phones the hint and damage readout fade out after a moment (styles.css). */
+  flashTips(ms = 4500) {
+    this.root.dataset.tips = 'show';
+    clearTimeout(this.tipsTimer);
+    this.tipsTimer = setTimeout(() => { this.root.dataset.tips = 'hide'; }, ms);
+  }
+
   showScreen(name, data = {}) {
+    if (name === 'play' && this.screenName !== 'play') this.flashTips();
     this.root.dataset.aiming = 'false';
     if (data.save) this.state.save = data.save;
     this.applyUIScale(this.state.save.uiScale);
