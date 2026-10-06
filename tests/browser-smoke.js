@@ -160,14 +160,14 @@ try {
   await page.locator('[data-action="next"]').click();
   assert.equal(await page.evaluate(()=>window.__patakha.getState().level),2);
 
-  // A legal Chakri lob flattens the level 8 skyline. The intact chunks in
-  // its rubble pile must still earn full destruction.
-  await page.evaluate(()=>window.__patakha.startLevel(8));
+  // A legal Sutli launch flattens both reinforced towers of level 7. The
+  // intact chunks in its rubble pile must still earn full destruction.
+  await page.evaluate(()=>window.__patakha.startLevel(7));
   if(await page.locator('[data-action="close-unlock"]').count())await page.locator('[data-action="close-unlock"]').click();
-  await page.getByRole('button',{name:'Choose Chakri',exact:true}).click();
+  await page.getByRole('button',{name:'Choose Sutli Bomb',exact:true}).click();
   const collapse=await page.evaluate(()=>{
     const game=window.__patakha.physics;
-    if(!game.launch('chakri',{x:29,y:-10}))throw new Error('collapsed skyline shot did not launch');
+    if(!game.launch('sutli',{x:29,y:-4}))throw new Error('collapsed skyline shot did not launch');
     for(let i=0;i<1000&&['flight','settling'].includes(game.status);i++)game.update(1000/60);
     for(let i=0;i<1200&&game.status==='ready'&&game.bodies.some(b=>!b.plugin.defeated&&!b.isSleeping);i++)game.update(1000/60);
     return {progress:game.progress,status:game.status,remaining:game.getState().remaining,unsupported:game.getUnsupportedBodies().length};

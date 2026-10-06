@@ -125,11 +125,11 @@ test('checked-in level solutions clear each authored puzzle within its ammunitio
 });
 
 test('fully collapsed street rubble counts as 100% even when tough chunks retain material health',()=>{
-  const g=new GamePhysics(LEVELS[7]);
+  const g=new GamePhysics(LEVELS[6]);
   const originalAreas=new Map(g.bodies.map(b=>[b,b.area]));
-  // A legal Chakri lob physically flattens the whole skyline; further shots
-  // would only grind intact concrete and steel rubble into fragments.
-  playShot(g,{type:'chakri',vx:29,vy:-10});
+  // A legal Sutli launch physically flattens both reinforced towers; further
+  // shots would only grind intact concrete and steel rubble into fragments.
+  playShot(g,{type:'sutli',vx:29,vy:-4});
   assert.equal(g.status,'won');assert.equal(g.progress,100);
   assert.ok(g.bodies.every(b=>b.plugin.destroyed));
   for(const kind of ['roof','tank','wall','slab','support'])assert.ok(g.bodies.some(b=>b.plugin.originalPiece.kind===kind&&b.plugin.destroyed));

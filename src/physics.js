@@ -26,6 +26,8 @@ export const FIXED_STEP = 1000 / 60;
 const SETTLED_MOTION = 0.3;
 // Pieces tilted further than this from upright or flat (radians) never sleep.
 const LEAN_AWAKE = 0.1;
+// Collision categories: intact building pieces, and destroyed rubble.
+const CATEGORY_BUILDING = 0x0002, CATEGORY_RUBBLE = 0x0004;
 const AIR = 0.002;
 const GRAVITY = 1;
 const GRAVITY_SCALE = 0.001;
@@ -134,6 +136,7 @@ export class GamePhysics {
         sleepThreshold: 240,
         chamfer: { radius: Math.min(2, piece.w / 6, piece.h / 6) },
         label: `target-${piece.material}`,
+        collisionFilter: { category: CATEGORY_BUILDING },
       });
       body.plugin = {
         piece, health: maxHealth, maxHealth, destroyed: false,
@@ -188,7 +191,7 @@ export class GamePhysics {
       rollingUntil: 0, pulseAt: 0, detonateAt: 0, hits: 0,
       launchPower: Math.min(1, speed / WORLD.maxSpeed), energy: Math.min(1, speed / WORLD.maxSpeed) ** 2,
     };
-    if(type==='rocket') this.projectile.collisionFilter.mask = 0xFFFFFFFF & ~0x0004;
+    if(type==='rocket') this.projectile.collisionFilter.mask = 0xFFFFFFFF & ~CATEGORY_RUBBLE;
     Body.setVelocity(this.projectile, v);
     Body.setAngle(this.projectile, Math.atan2(v.y, v.x));
     Composite.add(this.engine.world, this.projectile);
@@ -545,7 +548,10 @@ export class GamePhysics {
     const sx = p.piece.kind === 'support' || p.piece.kind === 'brace' ? 0.72 : 0.82;
     const sy = p.piece.kind === 'support' || p.piece.kind === 'brace' ? 0.48 : 0.68;
     Body.scale(body,sx,sy);
-    body.collisionFilter.category = 0x0004;
+    body.collisionFilter.category = CATEGORY_RUBBLE;
+    // A shattered leg cannot carry load: intact floors pass through its
+    // remains instead of hovering on them. It still lands on the street.
+    if (p.piece.kind === 'support' || p.piece.kind === 'brace') body.collisionFilter.mask = 0xFFFFFFFF & ~CATEGORY_BUILDING;
     p.piece = {...p.piece,w:p.piece.w*sx,h:p.piece.h*sy,sourceKind:p.piece.kind,kind:'rubble'};
     // Rubble remains a normal body, allowing it to transfer momentum to the
     // neighboring structure. Its ghost health can never award points twice.
@@ -580,7 +586,7 @@ export class GamePhysics {
     // while no longer being part of a standing building. Structural scoring
     // must not pulverize it or move it to make the destruction meter complete.
     this.score += Math.round(p.health * 1.2);
-    body.collisionFilter.category = 0x0004;
+    body.collisionFilter.category = CATEGORY_RUBBLE;
     this._emit({ type:'damage', x:body.position.x, y:body.position.y,
       material:p.piece.material, amount:0, destroyed:true, structural:true, reason:'structural-ruin' });
     this._awardDestruction(body);
@@ -609,6 +615,18 @@ export class GamePhysics {
       });
       for (const metric of metrics) if (metric.fallen) this._markStructuralRuin(metric.body);
       const superstructure = metrics.filter(m => !m.base);
+      // A toppled tower is wrecked even when its heap leans high against a
+      // wall: most of its floors are badly tilted or have dropped.
+      const displacedWeight = superstructure.reduce((sum, m) => {
+        const p = m.body.plugin, delta = m.body.angle - p.original.angle;
+        const tilt = Math.abs(Math.atan2(Math.sin(delta), Math.cos(delta)));
+        return sum + (p.destroyed || tilt > 0.5 || m.body.position.y - p.original.y > 60 ? p.weight : 0);
+      }, 0);
+      const totalUpper = superstructure.reduce((sum, m) => sum + m.body.plugin.weight, 0);
+      if (superstructure.length >= 3 && displacedWeight / totalUpper >= 0.7) {
+        for (const body of bodies) this._markStructuralRuin(body);
+        continue;
+      }
       const upperWeight = superstructure.reduce((sum,m) => sum + m.body.plugin.weight, 0);
       const ruinedWeight = superstructure.reduce((sum,m) => sum + (m.body.plugin.destroyed ? m.body.plugin.weight : 0), 0);
       const pileTop = Math.min(...bodies.flatMap(b => b.vertices.map(v => v.y)));
