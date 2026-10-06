@@ -6,6 +6,7 @@ import {GameUI} from './ui.js';
 import {GameAudio} from './audio.js';
 import {loadSave, writeSave, awardDiyas, recordResult, normalizeUIScale} from './progress.js';
 import {WORLD} from './config.js';
+import {recordPlay, fetchStats} from './stats.js';
 
 const LAUNCHER = WORLD.launcher;
 let save = loadSave();
@@ -86,6 +87,7 @@ audio.setMusic(save.music);
 audio.setSound(save.sound);
 ui.showScreen('start', {save});
 updateUI();
+fetchStats().then(stats => { if (stats) ui.setPlayerCount(stats.players); });
 
 function updateUI() {
   ui.update({level,physics:physics.getState(),selected,save});
@@ -113,6 +115,7 @@ function startLevel(id) {
   enterFullscreen();
   unlockAudio();
   level = LEVELS.find(l => l.id === Number(id)) || LEVELS[0];
+  recordPlay();
   physics.load(level);
   selected = level.unlockedTypes.at(-1) || 'rocket';
   cancelAim();

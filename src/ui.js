@@ -378,11 +378,22 @@ export class GameUI {
     this.applyUIScale(this.state.save.uiScale);
   }
 
+  /** Shows how many people have played, once the counter answers. */
+  setPlayerCount(players) {
+    this.playerCount = players;
+    const label = this.layer.querySelector('.club-count');
+    if (label) label.textContent = this.clubCountText();
+  }
+
+  clubCountText() {
+    return this.playerCount > 0 ? ` · ${this.playerCount.toLocaleString('en-IN')} ${this.playerCount === 1 ? 'MEMBER' : 'MEMBERS'}` : '';
+  }
+
   renderStart() {
     const saved = (this.state.save.unlocked || 1) > 1;
     this.layer.innerHTML = `
       <section class="start-content">
-        <div class="eyebrow hero-eyebrow"><span class="live-dot"></span> THE DIWALI DESTRUCTION CLUB</div>
+        <div class="eyebrow hero-eyebrow"><span class="live-dot"></span> THE DIWALI DESTRUCTION CLUB<span class="club-count">${this.clubCountText()}</span></div>
         <h1>PATAKHA<br><span>PANIC<span class="title-spark">✦</span></span></h1>
         <p class="hero-tagline">Aim. Ignite.<br>Bring the house down.</p>
         <p class="hero-description">Four firecrackers. Twelve skylines.<br>One very satisfying way to celebrate.</p>

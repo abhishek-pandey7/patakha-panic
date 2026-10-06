@@ -2,6 +2,12 @@
   "name": "play",
   "account_id": "ef61eb63cd42f229812155cce0b78756",
   "compatibility_date": "2026-10-01",
-  // Static site: Vite builds into dist/, Cloudflare serves it as Worker static assets.
-  "assets": { "directory": "./dist" }
+  // Vite builds the game into dist/, served as Worker static assets. The Worker
+  // in worker/index.js only handles /api/* for the player counter.
+  "main": "worker/index.js",
+  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
+  "durable_objects": {
+    "bindings": [{ "name": "PLAY_COUNTER", "class_name": "PlayCounter" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PlayCounter"] }]
 }
