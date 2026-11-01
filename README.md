@@ -2,6 +2,8 @@
 
 **Aim. Ignite. Bring the house down.**
 
+**Play it now:** https://play.patakha-panic.workers.dev
+
 A playable Diwali physics puzzle game with a pixel art foreground and the supplied animated Diwali city video. Launch four different firecrackers across a long obstacle course into twelve empty skylines, choose the right material matchup, discover their load-bearing supports, and clear at least 90% of each structure. Made with vanilla JavaScript, Canvas 2D, Vite, and Matter.js 0.20.0.
 
 ## Run
